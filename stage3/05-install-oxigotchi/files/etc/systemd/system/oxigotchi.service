@@ -1,0 +1,22 @@
+[Unit]
+Description=Pwnagotchi Zero Core Daemon
+After=network-online.target bluetooth.target zram-log.service zram-data.service
+Wants=network-online.target zram-log.service zram-data.service
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/oxigotchi
+Restart=on-failure
+RestartSec=5
+Nice=-5
+LimitNOFILE=65536
+MemoryMax=200M
+CPUQuota=80%
+Environment=RUST_LOG=info
+Environment=RUST_BACKTRACE=1
+WatchdogSec=120
+
+[Install]
+WantedBy=multi-user.target

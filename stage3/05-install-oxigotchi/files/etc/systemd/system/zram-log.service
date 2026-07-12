@@ -1,0 +1,13 @@
+[Unit]
+Description=ZRAM log mount
+Before=oxigotchi.service
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/zram-setup log 50M /etc/pwnagotchi/log
+ExecStop=/usr/local/bin/zram-teardown log
+
+[Install]
+WantedBy=local-fs.target

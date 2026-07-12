@@ -1,0 +1,38 @@
+# Build artifacts
+/target/
+/build/
+/output/
+*.img
+*.img.xz
+*.img.xz.sha256
+
+# Rust
+**/Cargo.lock
+**/target/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.env
+
+# pi-gen
+/work/
+/deploy/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

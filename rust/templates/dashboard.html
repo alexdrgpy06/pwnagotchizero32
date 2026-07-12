@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pwnagotchi Zero Dashboard</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid #333; }
+        h1 { font-size: 1.5rem; color: #4ade80; }
+        .face { font-size: 3rem; font-family: monospace; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        .card { background: #16213e; border-radius: 12px; padding: 20px; border: 1px solid #0f3460; }
+        .card h2 { font-size: 0.9rem; color: #4ade80; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #0f3460; }
+        .stat:last-child { border-bottom: none; }
+        .stat-label { color: #888; }
+        .stat-value { font-weight: bold; color: #fff; }
+        .stat-value.good { color: #4ade80; }
+        .stat-value.warn { color: #fbbf24; }
+        .stat-value.bad { color: #f87171; }
+        .handshake-list { max-height: 300px; overflow-y: auto; }
+        .handshake-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #0f3460; }
+        .handshake-info { display: flex; flex-direction: column; gap: 4px; }
+        .handshake-ap { font-weight: bold; }
+        .handshake-meta { font-size: 0.8rem; color: #888; }
+        .btn { background: #0f3460; color: #4ade80; border: 1px solid #4ade80; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+        .btn:hover { background: #1a4a80; }
+        .btn-danger { background: #3e1; color: #1a1a2e; border-color: #f87171; }
+        .btn-danger:hover { background: #f87171; color: #fff; }
+        .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+        .status-indicator.online { background: #4ade80; }
+        .status-indicator.offline { background: #f87171; }
+        .status-indicator.warning { background: #fbbf24; }
+        footer { margin-top: 30px; text-align: center; color: #555; font-size: 0.8rem; }
+        @media (max-width: 600px) {
+            .container { padding: 15px; }
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body x-data="dashboard()">
+    <div class="container">
+        <header>
+            <div>
+                <h1>Pwnagotchi Zero</h1>
+                <span class="face" x-text="face"></span>
+            </div>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <span>
+                    <span class="status-indicator" :class="btConnected ? 'online' : 'offline'"></span>
+                    <span x-text="btConnected ? 'BT Connected' : 'BT Disconnected'"></span>
+                </span>
+                <span x-text="battery + '%'"></span>
+            </div>
+        </header>
+        
+        <div class="grid">
+            <div class="card">
+                <h2>Status</h2>
+                <div class="stat">
+                    <span class="stat-label">Epoch</span>
+                    <span class="stat-value" x-text="epoch"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Mood</span>
+                    <span class="stat-value" x-text="mood"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Uptime</span>
+                    <span class="stat-value" x-text="uptime"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Level / XP</span>
+                    <span class="stat-value" x-text="level + ' / ' + xp"></span>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>WiFi</h2>
+                <div class="stat">
+                    <span class="stat-label">Handshakes</span>
+                    <span class="stat-value good" x-text="handshakes"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">APs Found</span>
+                    <span class="stat-value" x-text="apsFound"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Channel</span>
+                    <span class="stat-value" x-text="channel"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Blind Epochs</span>
+                    <span class="stat-value" :class="blindEpochs > 3 ? 'warn' : 'good'" x-text="blindEpochs"></span>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>System</h2>
+                <div class="stat">
+                    <span class="stat-label">Battery</span>
+                    <span class="stat-value" :class="battery < 20 ? 'bad' : battery < 50 ? 'warn' : 'good'" x-text="battery + '%'"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Charging</span>
+                    <span class="stat-value" :class="charging ? 'good' : 'bad'" x-text="charging ? 'Yes' : 'No'"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">CPU Temp</span>
+                    <span class="stat-value" x-text="cpuTemp + '°C'"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">RAM</span>
+                    <span class="stat-value" x-text="ramUsed + '/' + ramTotal + ' MB'"></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid" style="margin-top: 20px;">
+            <div class="card" style="grid-column: 1 / -1;">
+                <h2>Recent Handshakes <button class="btn" @click="loadHandshakes" style="float: right; font-size: 0.7rem;">Refresh</button></h2>
+                <div class="handshake-list" id="handshakes">
+                    <template x-for="hs in handshakes" :key="hs.path">
+                        <div class="handshake-item">
+                            <div class="handshake-info">
+                                <span class="handshake-ap" x-text="hs.ap"></span>
+                                <span class="handshake-meta" x-text="hs.client + ' • ' + hs.time + ' • ' + hs.type"></span>
+                            </div>
+                            <a :href="'/api/handshakes/download/' + hs.path" class="btn" style="align-self: center;">Download</a>
+                        </div>
+                    </template>
+                    <div x-show="handshakes.length === 0" style="text-align: center; padding: 20px; color: #666;">
+                        No handshakes captured yet
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            Pwnagotchi Zero v1.0.0 | <a href="https://github.com/pwnagotchi-zero" style="color: #4ade80;">GitHub</a>
+        </footer>
+    </div>
+
+    <script>
+        function dashboard() {
+            return {
+                face: '(•‿‿•)',
+                mood: 'happy',
+                epoch: 0,
+                handshakes: 0,
+                apsFound: 0,
+                channel: 1,
+                blindEpochs: 0,
+                level: 1,
+                xp: 0,
+                uptime: '0s',
+                battery: 100,
+                charging: false,
+                cpuTemp: 0,
+                ramUsed: 0,
+                ramTotal: 512,
+                btConnected: false,
+                handshakes: [],
+                
+                async init() {
+                    await this.refresh();
+                    // Poll every 5 seconds
+                    setInterval(() => this.refresh(), 5000);
+                    // WebSocket for live updates
+                    this.connectWS();
+                },
+                
+                async refresh() {
+                    try {
+                        const resp = await fetch('/api/status');
+                        const data = await resp.json();
+                        this.epoch = data.epoch;
+                        this.mood = data.mood;
+                        this.handshakes = data.handshakes;
+                        this.battery = data.battery;
+                        this.btConnected = data.bluetooth;
+                        this.uptime = this.formatUptime(data.uptime);
+                    } catch (e) {
+                        console.error('Status fetch failed:', e);
+                    }
+                },
+                
+                async loadHandshakes() {
+                    try {
+                        const resp = await fetch('/api/handshakes');
+                        this.handshakes = await resp.json();
+                    } catch (e) {
+                        console.error('Handshakes fetch failed:', e);
+                    }
+                },
+                
+                connectWS() {
+                    const ws = new WebSocket(`ws://${location.host}/ws`);
+                    ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'status') {
+                            this.epoch = data.epoch;
+                            this.mood = data.mood;
+                            this.face = data.face;
+                            this.handshakes = data.handshakes;
+                            this.battery = data.battery;
+                        } else if (data.type === 'handshake') {
+                            this.loadHandshakes();
+                        }
+                    };
+                    ws.onclose = () => setTimeout(() => this.connectWS(), 5000);
+                },
+                
+                formatUptime(seconds) {
+                    const d = Math.floor(seconds / 86400);
+                    const h = Math.floor((seconds % 86400) / 3600);
+                    const m = Math.floor((seconds % 3600) / 60);
+                    return (d ? d + 'd ' : '') + (h ? h + 'h ' : '') + m + 'm';
+                }
+            }
+        }
+        
+        // Initialize Alpine
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('dashboard', dashboard);
+        });
+    </script>
+</body>
+</html>

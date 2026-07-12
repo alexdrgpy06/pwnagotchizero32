@@ -1,0 +1,59 @@
+[package]
+name = "pwnagotchi-zero"
+version = "1.0.0"
+edition = "2021"
+description = "Modern pwnagotchi core in Rust for Pi Zero W/2W"
+license = "GPL-3.0-or-later"
+rust-version = "1.85"
+
+[[bin]]
+name = "oxigotchi"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[dependencies]
+# Config
+config = { version = "0.14", features = ["toml"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# Graphics
+embedded-graphics = "0.8"
+
+# Bluetooth — D-Bus removed until native zbus connection is implemented
+# zbus = { version = "4.0", default-features = false, features = ["blocking"] }
+
+# Web
+axum = { version = "0.7", features = ["json", "ws"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+minijinja = "2.0"
+
+# Lua plugins
+mlua = { version = "0.10", features = ["lua54", "vendored"] }
+
+# Logging
+tracing = { version = "0.1", features = ["std"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Utils
+anyhow = "1.0"
+tokio = { version = "1.38", features = ["full"] }
+bytes = "1.5"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+futures = "0.3"
+
+# Linux specifics (only available on Linux targets)
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+spidev = "0.4"
+i2cdev = "0.5"
+linux-embedded-hal = "0.3"

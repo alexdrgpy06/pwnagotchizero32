@@ -1,0 +1,14 @@
+[Unit]
+Description=Bluetooth Auto-Pair Agent
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=dbus
+BusName=org.pwnagotchi.BTAgent
+ExecStart=/usr/local/bin/oxigotchi-bt-agent
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=bluetooth.target

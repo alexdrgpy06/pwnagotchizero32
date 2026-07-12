@@ -1,0 +1,13 @@
+[Unit]
+Description=E-ink Display Startup (show boot face)
+DefaultDependencies=no
+After=local-fs.target
+Before=oxigotchi.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/epd-startup.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

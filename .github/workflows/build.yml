@@ -1,0 +1,158 @@
+name: Build Pwnagotchi Zero
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      arch:
+        type: choice
+        description: Architecture
+        options:
+          - 32bit
+          - 64bit
+        default: 32bit
+      release:
+        type: boolean
+        description: Create GitHub release
+        default: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-rust:
+    name: Cross-compile Rust (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [32bit, 64bit]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.arch == '32bit' && 'armv7-unknown-linux-gnueabihf' || 'aarch64-unknown-linux-gnu' }}
+      
+      - name: Install cross-compilation toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu
+      
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+      
+      - name: Build
+        working-directory: ./rust
+        run: |
+          if [ "${{ matrix.arch }}" = "32bit" ]; then
+            TARGET=armv7-unknown-linux-gnueabihf
+            LINKER=arm-linux-gnueabihf-gcc
+          else
+            TARGET=aarch64-unknown-linux-gnu
+            LINKER=aarch64-linux-gnu-gcc
+          fi
+          
+          cat > .cargo/config.toml << EOF
+          [target.$TARGET]
+          linker = "$LINKER"
+          rustflags = ["-C", "link-arg=-s"]
+          EOF
+          
+          cargo build --release --target $TARGET
+      
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: oxigotchi-${{ matrix.arch }}
+          path: rust/target/*/release/oxigotchi
+          retention-days: 7
+
+  build-image:
+    name: Build SD Image (${{ matrix.arch }})
+    needs: build-rust
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [32bit, 64bit]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download Rust binary
+        uses: actions/download-artifact@v4
+        with:
+          name: oxigotchi-${{ matrix.arch }}
+          path: rust/target/
+      
+      - name: Make binary executable
+        run: chmod +x rust/target/oxigotchi
+      
+      - name: Copy binary to stage3
+        run: |
+          mkdir -p stage3/05-install-oxigotchi/files/usr/local/bin
+          cp rust/target/oxigotchi stage3/05-install-oxigotchi/files/usr/local/bin/oxigotchi
+      
+      - name: Build image with pi-gen (Docker)
+        run: |
+          docker run --rm --privileged \
+            -v ${{ github.workspace }}:/workspace \
+            -v ${{ github.workspace }}/output:/output \
+            -e IMG_NAME="pwnagotchi-zero-${{ matrix.arch }}-${{ github.ref_name }}" \
+            -e DEPLOY_DIR=/output \
+            -e DEPLOY_COMPRESSION=xz \
+            -w /workspace \
+            ghcr.io/raspberrypi/pi-gen:latest \
+            bash -c "
+              cp /workspace/config/config-${{ matrix.arch }} config
+              ./build-docker.sh
+            "
+      
+      - name: Verify image
+        run: |
+          ls -la output/
+          IMG=$(ls output/*.img.xz)
+          echo "Image: $IMG"
+          sha256sum "$IMG" > "$IMG.sha256"
+          cat "$IMG.sha256"
+      
+      - name: Upload image
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwnagotchi-zero-${{ matrix.arch }}-${{ github.ref_name }}
+          path: output/*.img.xz
+          retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build-image
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/pwnagotchi-zero-32bit-${{ github.ref_name }}/*.img.xz
+            artifacts/pwnagotchi-zero-32bit-${{ github.ref_name }}/*.img.xz.sha256
+            artifacts/pwnagotchi-zero-64bit-${{ github.ref_name }}/*.img.xz
+            artifacts/pwnagotchi-zero-64bit-${{ github.ref_name }}/*.img.xz.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

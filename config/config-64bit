@@ -1,0 +1,5 @@
+IMG_NAME="pwnagotchi-zero-64bit"
+WORK_DIR="/home/pi/work-64bit"
+DEPLOY_DIR="/home/pi/images"
+DEPLOY_COMPRESSION="xz"
+STAGE_LIST="pi-gen-64bit/stage0 pi-gen-64bit/stage1 pi-gen-64bit/stage2 stage3"
