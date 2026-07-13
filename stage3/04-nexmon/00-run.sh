@@ -60,15 +60,21 @@ build_patch() {
     echo "nexmon: installed ${FWDIR}/${out}"
 }
 
-# Pi Zero 2 W main chip (also Pi 3).
-build_patch bcm43436b0 9_88_4_65 brcmfmac43436-sdio.bin
+# DIAGNOSTIC BUILD: the Pi Zero 2 W (bcm43436b0 chip) fails to boot on our
+# images while it boots fine with jayofelony/pwnagotchi's image on the same
+# SD card/power. Nexmon firmware is version-locked to a specific kernel, and
+# our pi-gen build tracks the bookworm branch HEAD rather than a pinned kernel
+# — a mismatched firmware/kernel pairing on this chip is a known way to crash
+# the SDIO/WiFi subsystem hard enough to reset the board. Skipping the
+# bcm43436b0 patch here (stock apt firmware-brcm80211 blob stays in place) to
+# isolate whether this is the boot blocker. bcm43430a1 (OG Pi Zero W, which
+# demonstrably boots) is unaffected and still gets patched.
+# TODO: once confirmed, pin the pi-gen kernel version and re-enable this.
+# build_patch bcm43436b0 9_88_4_65 brcmfmac43436-sdio.bin
+# cp -f "${FWDIR}/brcmfmac43436-sdio.bin" "${FWDIR}/brcmfmac43436s-sdio.bin"
+
 # Pi Zero W and older Pi Zero 2 W revisions.
 build_patch bcm43430a1 7_45_41_46 brcmfmac43430-sdio.bin
-
-# Cover every Pi Zero 2 W chip-ID variant: whichever firmware name the OTP asks
-# for, hand it a patched blob. Copies (not symlinks) so the kernel firmware
-# loader and any initramfs pick them up reliably.
-cp -f "${FWDIR}/brcmfmac43436-sdio.bin" "${FWDIR}/brcmfmac43436s-sdio.bin"
 cp -f "${FWDIR}/brcmfmac43430-sdio.bin" "${FWDIR}/brcmfmac43430b0-sdio.bin"
 
 # Trim build artefacts and the largest build-only package to keep the image
