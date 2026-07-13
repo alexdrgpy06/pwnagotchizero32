@@ -43,6 +43,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu
+
+      - name: Install ARMv6 RPi toolchain (32bit)
+        if: matrix.arch == '32bit'
+        run: |
+          # Modern GCC built with -march=armv6 (libgcc/crt are ARMv6) so the
+          # binary runs on the original Pi Zero as well as the Zero 2 W.
+          mkdir -p "$HOME/opt"
+          wget -qO- https://github.com/tttapa/docker-arm-cross-toolchain/releases/latest/download/x-tools-armv6-rpi-linux-gnueabihf.tar.xz | tar xJ -C "$HOME/opt"
+          echo "$HOME/opt/x-tools/armv6-rpi-linux-gnueabihf/bin" >> "$GITHUB_PATH"
       
       - name: Setup Rust Cache
         uses: actions/cache@v4
@@ -62,9 +71,8 @@ jobs:
           # committed .cargo/config.toml so they can't be lost.
           if [ "${{ matrix.arch }}" = "32bit" ]; then
             TARGET=arm-unknown-linux-gnueabihf
-            export CC_arm_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc
-            # C deps (e.g. mlua's Lua) must be ARMv6 too, or they SIGILL on Zero.
-            export CFLAGS_arm_unknown_linux_gnueabihf="-march=armv6zk -mtune=arm1176jzf-s -mfpu=vfp -mfloat-abi=hard -marm"
+            # Use the ARMv6 RPi toolchain for C deps (mlua's Lua) too.
+            export CC_arm_unknown_linux_gnueabihf=armv6-rpi-linux-gnueabihf-gcc
           else
             TARGET=aarch64-unknown-linux-gnu
             export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
@@ -72,17 +80,17 @@ jobs:
 
           cargo build --release --target $TARGET
 
-      - name: Report 32-bit binary ARM arch
+      - name: Verify 32-bit binary is ARMv6 (runs on original Pi Zero)
         if: matrix.arch == '32bit'
         run: |
           BIN=rust/target/arm-unknown-linux-gnueabihf/release/oxigotchi
           echo "== ARM attributes =="
           arm-linux-gnueabihf-readelf -A "$BIN" | grep -E "Tag_CPU_arch:|Tag_CPU_name:" || true
           if arm-linux-gnueabihf-readelf -A "$BIN" | grep -qiE "Tag_CPU_arch:\s*v7"; then
-            echo "::warning::32-bit binary is ARMv7 (Ubuntu toolchain baseline) — runs on Pi Zero 2 W but NOT the original Pi Zero. ARMv6 toolchain work tracked for OG Zero support."
-          else
-            echo "OK: 32-bit binary is ARMv6"
+            echo "ERROR: 32-bit binary is ARMv7 — will not run on the original Pi Zero/Zero W"
+            exit 1
           fi
+          echo "OK: 32-bit binary is ARMv6 (runs on OG Zero and Zero 2 W)"
       
       - name: Upload binary
         uses: actions/upload-artifact@v4

@@ -4,7 +4,10 @@
 # the original Pi Zero / Zero W (ARMv6) as well as the Pi Zero 2 W — ARMv6 code
 # runs on both. C dependencies (mlua's Lua) get matching -march via CFLAGS in CI.
 [target.arm-unknown-linux-gnueabihf]
-linker = "arm-linux-gnueabihf-gcc"
+# Link with the ARMv6 (arm1176) RPi toolchain so libgcc/crt are ARMv6 too —
+# the Ubuntu arm-linux-gnueabihf toolchain is ARMv7-baseline and its runtime
+# SIGILLs on the original Pi Zero. Provided on PATH by CI.
+linker = "armv6-rpi-linux-gnueabihf-gcc"
 rustflags = ["-C", "link-arg=-s", "-C", "target-cpu=arm1176jzf-s"]
 
 [target.armv7-unknown-linux-gnueabihf]
