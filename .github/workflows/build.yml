@@ -109,8 +109,24 @@ jobs:
           mkdir -p stage3/05-install-oxigotchi/files/usr/local/bin
           find rust/target -name oxigotchi -type f -exec cp {} stage3/05-install-oxigotchi/files/usr/local/bin/oxigotchi \;
       
-      - name: Install QEMU for pi-gen
-        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support qemu-user-binfmt
+      - name: Set up QEMU binfmt for pi-gen
+        run: |
+          set -euxo pipefail
+          # pi-gen runs the ARM chroot on this x86 runner and build-docker.sh gates on
+          # `which qemu-arm` (shipped by qemu-user-binfmt). On Ubuntu that package
+          # STRICTLY CONFLICTS with qemu-user-static, so apt refuses to install both.
+          # Fix: install only qemu-user-static, register binfmt from it, and symlink the
+          # binary name build-docker.sh looks for.
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-user-static binfmt-support
+          # Register every qemu interpreter in binfmt_misc using F-flag *static* binaries
+          # so emulation keeps working inside pi-gen's privileged build container.
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+          # Satisfy build-docker.sh's `which qemu-arm` check without qemu-user-binfmt.
+          sudo ln -sf /usr/bin/qemu-arm-static /usr/bin/qemu-arm
+          # Sanity: prove the emulator resolves and the handler is present.
+          which qemu-arm
+          test -e /proc/sys/fs/binfmt_misc/qemu-arm
       
       - name: Build image with pi-gen (Docker)
         run: |
@@ -134,32 +150,4 @@ jobs:
       
       - name: Upload image
         uses: actions/upload-artifact@v4
-        with:
-          name: net-monitor-zero-${{ matrix.arch }}-${{ github.ref_name }}
-          path: output/*.img.xz
-          retention-days: 30
-
-  release:
-    name: Create Release
-    needs: build-image
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-      
-      - name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            artifacts/net-monitor-zero-32bit-${{ github.ref_name }}/*.img.xz
-            artifacts/net-monitor-zero-32bit-${{ github.ref_name }}/*.img.xz.sha256
-            artifacts/net-monitor-zero-64bit-${{ github.ref_name }}/*.img.xz
-            artifacts/net-monitor-zero-64bit-${{ github.ref_name }}/*.img.xz.sha256
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
