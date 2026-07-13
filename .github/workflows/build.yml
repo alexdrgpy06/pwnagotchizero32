@@ -27,7 +27,7 @@ env:
 jobs:
   build-rust:
     name: Cross-compile Rust (${{ matrix.arch }})
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         arch: [32bit, 64bit]
@@ -51,9 +51,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             rust/target
-          key: ubuntu22.04-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ubuntu24.04-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ubuntu22.04-cargo-
+            ubuntu24.04-cargo-
       
       - name: Build
         working-directory: ./rust
@@ -87,7 +87,7 @@ jobs:
   build-image:
     name: Build SD Image (${{ matrix.arch }})
     needs: build-rust
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -168,7 +168,7 @@ jobs:
     name: Create Release
     needs: build-image
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
