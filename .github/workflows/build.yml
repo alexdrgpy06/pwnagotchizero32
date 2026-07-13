@@ -91,7 +91,9 @@ jobs:
     strategy:
       matrix:
         arch: [32bit, 64bit]
-    timeout-minutes: 90
+    # The nexmon firmware build runs under qemu emulation and adds a good chunk
+    # of time on top of the base pi-gen build.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       

@@ -49,15 +49,17 @@ cat > "${ROOTFS_DIR}/etc/cron.d/rsync-zram" << 'EOF'
 * * * * * root /usr/local/bin/rsync-zram.sh >> /var/log/rsync-zram.log 2>&1
 EOF
 
-# Enable the core daemon. The zram/bt-agent/nm-watchdog/epd-startup helper
-# units are installed but NOT enabled for this image: several reference
-# scripts that aren't in the overlay yet or contain bugs, and enabling them
-# would only add failed units at boot. The daemon itself brings up the display
-# and epoch loop, so the image is fully functional without them. Re-enable
-# them as their scripts are fixed.
+# Enable the daemon and the supporting units whose scripts are now in place.
+# epd-startup.service and safe-shutdown.service are intentionally left disabled:
+# the daemon draws the boot/shutdown faces itself, and shutdown sync runs via
+# the /lib/systemd/system-shutdown hook. bt-pan@.service is a template started
+# per-device at runtime.
 on_chroot << 'EOF'
 set +e
-systemctl enable oxigotchi.service && echo "enabled oxigotchi.service" || echo "oxigotchi: could not enable oxigotchi.service"
+for unit in oxigotchi.service zram-log.service zram-data.service \
+            rsync-zram.timer bt-agent.service nm-watchdog.service; do
+    systemctl enable "$unit" && echo "enabled $unit" || echo "oxigotchi: could not enable $unit (continuing)"
+done
 systemctl enable NetworkManager.service 2>/dev/null || true
 EOF
 

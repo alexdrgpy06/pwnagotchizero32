@@ -6,8 +6,8 @@ DefaultDependencies=no
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/local/bin/zram-setup log 50M /etc/pwnagotchi/log
-ExecStop=/usr/local/bin/zram-teardown log
+ExecStart=/usr/local/bin/zram-setup.sh log 50M /etc/pwnagotchi/log
+ExecStop=/usr/local/bin/zram-teardown.sh log
 
 [Install]
 WantedBy=local-fs.target

@@ -12,7 +12,7 @@ if [[ -z "$NAME" || -z "$SIZE" || -z "$MOUNTPOINT" ]]; then
     echo "Usage: $0 <name> <size> <mountpoint>"
     echo "Example: $0 log 50M /etc/pwnagotchi/log"
     exit 1
-done
+fi
 
 # Determine zram device number
 if [[ "$NAME" == "log" ]]; then

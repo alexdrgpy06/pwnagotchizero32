@@ -1,15 +1,74 @@
 #!/bin/bash -e
-# 04-nexmon/00-run.sh - Install monitor-mode helper scripts.
+# 04-nexmon/00-run.sh - Build nexmon monitor-mode + injection firmware.
 #
-# NOTE: The nexmon firmware build is intentionally deferred. Compiling nexmon
-# (which bootstraps a gcc-4.9 cross toolchain) inside the qemu-emulated ARM
-# chroot takes hours and is highly fragile, and it must match the exact kernel
-# shipped in the image. Doing it here made the whole image build unbuildable.
+# Firmware-only install: we patch the brcmfmac firmware blobs (which is what
+# enables frame injection / deauth) and keep the stock brcmfmac driver, which
+# already supports monitor mode via `iw` on kernel 6.x. This deliberately
+# avoids building/replacing the kernel module, so there is no kernel-version /
+# vermagic matching to get wrong.
 #
-# Without patched firmware the BCM43430/43436 radios still enter monitor mode
-# for scanning via `iw`, but frame injection (deauth) needs nexmon. Track that
-# as a follow-up; the image otherwise boots and runs the daemon + display.
+# Covers every Pi Zero 2 W wireless-chip revision (43436 / 43436s / 43430 /
+# 43430b0) plus the original Pi Zero W (43430), using the DrSchottky/nexmon
+# fork and toolchain (same as jayofelony/pwnagotchi).
 
+on_chroot << 'CHROOT'
+set -e
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y --no-install-recommends \
+    git build-essential gcc-arm-none-eabi \
+    autoconf automake libtool texinfo bison flex pkg-config \
+    libgmp3-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev
+
+FWDIR=/usr/lib/firmware/brcm
+SRC=/usr/local/src/nexmon
+rm -rf "$SRC"
+git clone --depth 1 https://github.com/DrSchottky/nexmon.git "$SRC"
+
+cd "$SRC"
+# Build the nexmon utilities / flashpatch toolchain (uses gcc-arm-none-eabi).
+source ./setup_env.sh
+make
+
+install -d -m 755 "$FWDIR"
+
+build_patch() {
+    local chip="$1" ver="$2" out="$3"
+    echo "nexmon: building firmware patch ${chip}/${ver}"
+    ( source "${SRC}/setup_env.sh" && cd "${SRC}/patches/${chip}/${ver}/nexmon" && make )
+    local built="${SRC}/patches/${chip}/${ver}/nexmon/${out}"
+    if [ ! -f "$built" ]; then
+        echo "nexmon: ERROR expected firmware ${out} not produced for ${chip}" >&2
+        exit 1
+    fi
+    install -D -m 644 "$built" "${FWDIR}/${out}"
+    echo "nexmon: installed ${FWDIR}/${out}"
+}
+
+# Pi Zero 2 W main chip (also Pi 3).
+build_patch bcm43436b0 9_88_4_65 brcmfmac43436-sdio.bin
+# Pi Zero W and older Pi Zero 2 W revisions.
+build_patch bcm43430a1 7_45_41_46 brcmfmac43430-sdio.bin
+
+# Cover every Pi Zero 2 W chip-ID variant: whichever firmware name the OTP asks
+# for, hand it a patched blob. Copies (not symlinks) so the kernel firmware
+# loader and any initramfs pick them up reliably.
+cp -f "${FWDIR}/brcmfmac43436-sdio.bin" "${FWDIR}/brcmfmac43436s-sdio.bin"
+cp -f "${FWDIR}/brcmfmac43430-sdio.bin" "${FWDIR}/brcmfmac43430b0-sdio.bin"
+
+# Trim build artefacts and the largest build-only package to keep the image
+# small; ignore errors so cleanup can't fail the build.
+rm -rf "$SRC"
+apt-get purge -y gcc-arm-none-eabi 2>/dev/null || true
+apt-get autoremove -y 2>/dev/null || true
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+
+echo "nexmon: firmware install complete"
+CHROOT
+
+# Monitor-mode helper scripts (used by the daemon's mon_start/mon_stop hooks).
 install -m 755 /dev/stdin "${ROOTFS_DIR}/usr/bin/monstart" << 'EOF'
 #!/bin/bash
 # Put the Wi-Fi radio into monitor mode as wlan0mon.
