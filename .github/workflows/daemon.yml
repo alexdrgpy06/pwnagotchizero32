@@ -1,0 +1,67 @@
+name: Publish daemon binary
+
+on:
+  push:
+    tags:
+      - 'daemon-v*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-daemon:
+    name: Build + publish ARMv6 daemon
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: arm-unknown-linux-gnueabihf
+
+      - name: Install ARMv6 RPi toolchain
+        run: |
+          # Modern GCC built -march=armv6 with an old glibc (2.25) so the binary
+          # runs on the original Pi Zero AND the Zero 2 W, on Bullseye or Bookworm.
+          mkdir -p "$HOME/opt"
+          wget -qO- https://github.com/tttapa/toolchains/releases/latest/download/x-tools-armv6-rpi-linux-gnueabihf-gcc14.tar.xz | tar xJ -C "$HOME/opt"
+          GCC_DIR=$(dirname "$(find "$HOME/opt" -name 'armv6-rpi-linux-gnueabihf-gcc' -type f 2>/dev/null | head -1)")
+          test -n "$GCC_DIR"
+          echo "$GCC_DIR" >> "$GITHUB_PATH"
+
+      - name: Build (ARMv6)
+        working-directory: ./rust
+        run: |
+          export CC_arm_unknown_linux_gnueabihf=armv6-rpi-linux-gnueabihf-gcc
+          cargo build --release --target arm-unknown-linux-gnueabihf
+
+      - name: Verify ARMv6
+        run: |
+          BIN=rust/target/arm-unknown-linux-gnueabihf/release/oxigotchi
+          arm-linux-gnueabihf-readelf -A "$BIN" | grep -E "Tag_CPU_arch:" || true
+          arm-linux-gnueabihf-readelf -A "$BIN" | grep -qiE "Tag_CPU_arch:\s*v7" && { echo "ERROR ARMv7"; exit 1; } || true
+
+      - name: Stage release assets
+        run: |
+          mkdir -p out
+          cp rust/target/arm-unknown-linux-gnueabihf/release/oxigotchi out/oxigotchi
+          cp rust/defaults.toml out/config.toml
+          cp scripts/deploy-oxigotchi.sh out/deploy-oxigotchi.sh
+          (cd out && sha256sum oxigotchi > oxigotchi.sha256)
+          ls -la out
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            out/oxigotchi
+            out/oxigotchi.sha256
+            out/config.toml
+            out/deploy-oxigotchi.sh
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
