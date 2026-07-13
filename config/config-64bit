@@ -1,5 +1,4 @@
 IMG_NAME="net-monitor-zero-64bit"
-WORK_DIR="/home/pi/work-64bit"
-DEPLOY_DIR="/home/pi/images"
 DEPLOY_COMPRESSION="xz"
-STAGE_LIST="pi-gen-64bit/stage0 pi-gen-64bit/stage1 pi-gen-64bit/stage2 stage3"
+STAGE_LIST="stage0 stage1 stage2 stage3"
+ARCH="arm64"

@@ -1,0 +1,7 @@
+# Export the SD image after stage3 completes, so the exported rootfs contains
+# all oxigotchi customizations (packages, nexmon firmware, daemon, configs).
+# No "-lite" suffix: this is the only image we ship.
+IMG_SUFFIX=""
+if [ "${USE_QEMU}" = "1" ]; then
+	export IMG_SUFFIX="${IMG_SUFFIX}-qemu"
+fi

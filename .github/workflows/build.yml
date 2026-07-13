@@ -130,11 +130,16 @@ jobs:
       
       - name: Build image with pi-gen (Docker)
         run: |
-          git clone --depth 1 https://github.com/RPi-Distro/pi-gen.git pi-gen
+          # Pin to the bookworm (Debian 12) branch: nexmon firmware and the
+          # pwnagotchi toolchain in stage3 target bookworm, not trixie.
+          git clone --depth 1 --branch bookworm https://github.com/RPi-Distro/pi-gen.git pi-gen
           rsync -a --delete stage3/ pi-gen/stage3/
           cp config/config-${{ matrix.arch }} pi-gen/config
           echo "IMG_NAME=net-monitor-zero-${{ matrix.arch }}-${{ github.ref_name }}" >> pi-gen/config
           echo "DEPLOY_COMPRESSION=xz" >> pi-gen/config
+          # Only stage3 exports an image; stop stock stage2 from also exporting a
+          # "lite" image (saves an export and avoids two .img.xz files downstream).
+          touch pi-gen/stage2/SKIP_IMAGES
           cd pi-gen
           ./build-docker.sh
           mkdir -p ../output
@@ -143,7 +148,8 @@ jobs:
       - name: Verify image
         run: |
           ls -la output/
-          IMG=$(ls output/*.img.xz)
+          IMG=$(ls output/*.img.xz | head -1)
+          if [ -z "$IMG" ]; then echo "No image produced"; exit 1; fi
           echo "Image: $IMG"
           sha256sum "$IMG" > "$IMG.sha256"
           cat "$IMG.sha256"
