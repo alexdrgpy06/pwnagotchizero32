@@ -58,7 +58,7 @@
                 <span x-text="battery + '%'"></span>
             </div>
         </header>
-        
+
         <div class="grid">
             <div class="card">
                 <h2>Status</h2>
@@ -79,7 +79,7 @@
                     <span class="stat-value" x-text="level + ' / ' + xp"></span>
                 </div>
             </div>
-            
+
             <div class="card">
                 <h2>WiFi</h2>
                 <div class="stat">
@@ -99,7 +99,7 @@
                     <span class="stat-value" :class="blindEpochs > 3 ? 'warn' : 'good'" x-text="blindEpochs"></span>
                 </div>
             </div>
-            
+
             <div class="card">
                 <h2>System</h2>
                 <div class="stat">
@@ -120,7 +120,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="grid" style="margin-top: 20px;">
             <div class="card" style="grid-column: 1 / -1;">
                 <h2>Recent Handshakes <button class="btn" @click="loadHandshakes" style="float: right; font-size: 0.7rem;">Refresh</button></h2>
@@ -140,7 +140,7 @@
                 </div>
             </div>
         </div>
-        
+
         <footer>
             Pwnagotchi Zero v1.0.0 | <a href="https://github.com/pwnagotchi-zero" style="color: #4ade80;">GitHub</a>
         </footer>
@@ -170,9 +170,7 @@
                 async init() {
                     await this.refresh();
                     await this.loadHandshakes();
-                    // Poll every 5 seconds
                     setInterval(() => this.refresh(), 5000);
-                    // WebSocket for live updates
                     this.connectWS();
                 },
 
@@ -225,7 +223,7 @@
                     };
                     ws.onclose = () => setTimeout(() => this.connectWS(), 5000);
                 },
-                
+
                 formatUptime(seconds) {
                     const d = Math.floor(seconds / 86400);
                     const h = Math.floor((seconds % 86400) / 3600);
@@ -234,8 +232,7 @@
                 }
             }
         }
-        
-        // Initialize Alpine
+
         document.addEventListener('alpine:init', () => {
             Alpine.data('dashboard', dashboard);
         });

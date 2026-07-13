@@ -107,7 +107,7 @@ async fn api_handshakes(State(state): State<AppState>) -> Json<Vec<serde_json::V
             out.push(serde_json::json!({
                 "path": file,
                 "ap": format_bssid(bssid),
-                "client": "—",
+                "client": "-",
                 "time": ts,
                 "type": "handshake",
             }));
