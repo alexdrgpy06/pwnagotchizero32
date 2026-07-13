@@ -376,7 +376,7 @@ pwnagotchi-zero/
 ./scripts/bake_release.sh --arch 64bit --release v1.0.0
 
 # Cross-compile Rust binary only
-./scripts/build_oxigotchi.sh --target armv7-unknown-linux-gnueabihf
+./scripts/build_oxigotchi.sh --target arm-unknown-linux-gnueabihf
 ./scripts/build_oxigotchi.sh --target aarch64-unknown-linux-gnu
 ```
 

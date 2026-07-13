@@ -31,7 +31,7 @@ apt-get install -y \
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
-rustup target add armv7-unknown-linux-gnueabihf
+rustup target add arm-unknown-linux-gnueabihf
 rustup target add aarch64-unknown-linux-gnu
 
 # Install cross-compilation toolchain

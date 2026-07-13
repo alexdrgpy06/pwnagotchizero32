@@ -26,16 +26,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "=== Pwnagotchi Zero Release Builder ==="
+echo "=== net-monitor-zero Release Builder ==="
 echo "Architecture: $ARCH"
 echo "Release: $RELEASE"
 
 # Determine config file
 if [[ "$ARCH" == "32bit" ]]; then
     CONFIG_FILE="config/config-32bit"
-    IMG_NAME="pwnagotchi-zero-32bit"
+    IMG_NAME="net-monitor-zero-32bit"
 elif [[ "$ARCH" == "64bit" ]]; then
     CONFIG_FILE="config/config-64bit"
-    IMG_NAME="pwnagotchi-zero-64bit"
+    IMG_NAME="net-monitor-zero-64bit"
 else
     echo "Invalid arch: $ARCH"
     usage

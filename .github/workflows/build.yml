@@ -34,7 +34,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.arch == '32bit' && 'armv7-unknown-linux-gnueabihf' || 'aarch64-unknown-linux-gnu' }}
+          targets: ${{ matrix.arch == '32bit' && 'arm-unknown-linux-gnueabihf' || 'aarch64-unknown-linux-gnu' }}
       
       - name: Install cross-compilation toolchain
         run: |
@@ -55,7 +55,7 @@ jobs:
         working-directory: ./rust
         run: |
           if [ "${{ matrix.arch }}" = "32bit" ]; then
-            TARGET=armv7-unknown-linux-gnueabihf
+            TARGET=arm-unknown-linux-gnueabihf
             LINKER=arm-linux-gnueabihf-gcc
           else
             TARGET=aarch64-unknown-linux-gnu
@@ -67,6 +67,9 @@ jobs:
           linker = "$LINKER"
           rustflags = ["-C", "link-arg=-s"]
           EOF
+          
+          export CC_arm_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc
+          export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
           
           cargo build --release --target $TARGET
       
@@ -107,7 +110,7 @@ jobs:
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
             -v ${{ github.workspace }}/output:/output \
-            -e IMG_NAME="pwnagotchi-zero-${{ matrix.arch }}-${{ github.ref_name }}" \
+            -e IMG_NAME="net-monitor-zero-${{ matrix.arch }}-${{ github.ref_name }}" \
             -e DEPLOY_DIR=/output \
             -e DEPLOY_COMPRESSION=xz \
             -w /workspace \
@@ -128,7 +131,7 @@ jobs:
       - name: Upload image
         uses: actions/upload-artifact@v4
         with:
-          name: pwnagotchi-zero-${{ matrix.arch }}-${{ github.ref_name }}
+          name: net-monitor-zero-${{ matrix.arch }}-${{ github.ref_name }}
           path: output/*.img.xz
           retention-days: 30
 
@@ -149,10 +152,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/pwnagotchi-zero-32bit-${{ github.ref_name }}/*.img.xz
-            artifacts/pwnagotchi-zero-32bit-${{ github.ref_name }}/*.img.xz.sha256
-            artifacts/pwnagotchi-zero-64bit-${{ github.ref_name }}/*.img.xz
-            artifacts/pwnagotchi-zero-64bit-${{ github.ref_name }}/*.img.xz.sha256
+            artifacts/net-monitor-zero-32bit-${{ github.ref_name }}/*.img.xz
+            artifacts/net-monitor-zero-32bit-${{ github.ref_name }}/*.img.xz.sha256
+            artifacts/net-monitor-zero-64bit-${{ github.ref_name }}/*.img.xz
+            artifacts/net-monitor-zero-64bit-${{ github.ref_name }}/*.img.xz.sha256
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

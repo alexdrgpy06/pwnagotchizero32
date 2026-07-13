@@ -47,7 +47,7 @@ fi
 
 # Sync handshakes (already on disk, but ensure)
 log "Syncing handshakes..."
-rsync -a /etc/pwnagotchi/handshakes/ /var/lib/pwnagotchi/handshakes/ 2>&1 | tee -a "$LOG_FILE" || true
+rsync -a /etc/net-monitor/captures/ /var/lib/net-monitor/captures/ 2>&1 | tee -a "$LOG_FILE" || true
 
 # Sync config backups
 log "Syncing config backups..."

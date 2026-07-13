@@ -133,7 +133,7 @@ Output: `output/pwnagotchi-zero-32bit-v1.0.0.img.xz`
 ./scripts/build_oxigotchi.sh --arch 64bit
 ```
 
-Binaries: `rust/target/armv7-unknown-linux-gnueabihf/release/oxigotchi` or `aarch64-unknown-linux-gnu/release/oxigotchi`
+Binaries: `rust/target/arm-unknown-linux-gnueabihf/release/oxigotchi` or `aarch64-unknown-linux-gnu/release/oxigotchi`
 
 ## Architecture
 

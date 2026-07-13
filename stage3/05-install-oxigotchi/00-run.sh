@@ -6,6 +6,7 @@ mkdir -p /usr/local/bin
 mkdir -p /etc/pwnagotchi/conf.d
 mkdir -p /etc/pwnagotchi/custom-plugins/faces
 mkdir -p /etc/pwnagotchi/handshakes
+mkdir -p /etc/net-monitor/captures
 mkdir -p /etc/pwnagotchi/log
 mkdir -p /etc/pwnagotchi/backups
 mkdir -p /etc/pwnagotchi/sessions
@@ -116,12 +117,16 @@ chmod +x /usr/local/bin/rsync-zram.sh
 # Create persistent storage directories
 mkdir -p /var/lib/pwnagotchi/log
 mkdir -p /var/lib/pwnagotchi/data
+mkdir -p /var/lib/net-monitor/captures
 
 # Set permissions
 chown -R root:root /etc/pwnagotchi
 chmod 755 /etc/pwnagotchi
 chmod 644 /etc/pwnagotchi/config.toml
 chmod 755 /etc/pwnagotchi/handshakes
+chown -R root:root /etc/net-monitor || true
+chmod 755 /etc/net-monitor || true
+chmod 755 /etc/net-monitor/captures || true
 chmod 755 /etc/pwnagotchi/custom-plugins
 chmod 755 /usr/local/share/pwnagotchi/custom-plugins
 

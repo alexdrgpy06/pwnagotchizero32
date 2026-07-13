@@ -141,7 +141,7 @@ enabled = true
 remote_host = "hashcat.local"
 remote_user = "hashcat"
 remote_path = "/home/hashcat/captures"
-local_path = "/etc/pwnagotchi/handshakes"
+local_path = "/etc/net-monitor/captures/"
 sync_interval = 300
 pull_potfile = true
 potfile_path = "/home/hashcat/hashcat.potfile"
@@ -204,7 +204,7 @@ position_x = 0
 position_y = 16
 
 [bettercap]
-handshakes = "/etc/pwnagotchi/handshakes"
+handshakes = "/etc/net-monitor/captures/"
 silence = [
   "ble.device.new",
   "ble.device.lost",

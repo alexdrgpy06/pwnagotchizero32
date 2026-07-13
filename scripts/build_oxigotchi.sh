@@ -31,8 +31,11 @@ done
 cd "$RUST_DIR"
 
 # Install targets
-rustup target add armv7-unknown-linux-gnueabihf
+rustup target add arm-unknown-linux-gnueabihf
 rustup target add aarch64-unknown-linux-gnu
+
+export CC_arm_unknown_linux_gnueabihf="arm-linux-gnueabihf-gcc"
+export CC_aarch64_unknown_linux_gnu="aarch64-linux-gnu-gcc"
 
 # Install cross-compilation toolchain
 apt-get update && apt-get install -y \
@@ -42,9 +45,9 @@ apt-get update && apt-get install -y \
     libc6-dev-arm64-cross
 
 if [[ "$ARCH" == "32bit" ]]; then
-    TARGET="armv7-unknown-linux-gnueabihf"
+    TARGET="arm-unknown-linux-gnueabihf"
     LINKER="arm-linux-gnueabihf-gcc"
-    CARGO_TARGET="armv7-unknown-linux-gnueabihf"
+    CARGO_TARGET="arm-unknown-linux-gnueabihf"
 else
     TARGET="aarch64-unknown-linux-gnu"
     LINKER="aarch64-linux-gnu-gcc"
