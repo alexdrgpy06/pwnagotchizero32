@@ -31,13 +31,18 @@ dtoverlay=spi0-2cs
 EOF
 fi
 
-# Load the USB ethernet gadget so the Pi is reachable over the USB data port.
-# dtoverlay=dwc2 (above) enables the controller; g_ether must be module-loaded
-# via cmdline.txt or usb0 never appears. Append to the single cmdline line.
+# Load the dwc2 USB controller so a gadget can bind. We do NOT load g_ether:
+# on Windows g_ether (CDC-ECM) gets mis-bound as a serial COM port. Instead a
+# boot service (usb-gadget.service) builds an RNDIS gadget via configfs, which
+# Windows recognises as a real network adapter.
 CMDLINE="${BOOT_DIR}/cmdline.txt"
-if [ -f "${CMDLINE}" ] && ! grep -q "modules-load=dwc2,g_ether" "${CMDLINE}"; then
+if [ -f "${CMDLINE}" ]; then
 	sed -i 's/[[:space:]]*$//' "${CMDLINE}"
-	sed -i 's/$/ modules-load=dwc2,g_ether/' "${CMDLINE}"
+	# Drop any prior g_ether request, then ensure dwc2 is module-loaded.
+	sed -i 's/ *modules-load=dwc2,g_ether//g' "${CMDLINE}"
+	if ! grep -q "modules-load=dwc2" "${CMDLINE}"; then
+		sed -i 's/$/ modules-load=dwc2/' "${CMDLINE}"
+	fi
 fi
 
 # Load i2c-dev at boot for PiSugar battery monitoring.

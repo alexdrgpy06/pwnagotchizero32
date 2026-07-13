@@ -62,7 +62,7 @@ EOF
 # per-device at runtime.
 on_chroot << 'EOF'
 set +e
-for unit in oxigotchi.service zram-log.service zram-data.service \
+for unit in usb-gadget.service oxigotchi.service zram-log.service zram-data.service \
             rsync-zram.timer bt-agent.service nm-watchdog.service; do
     systemctl enable "$unit" && echo "enabled $unit" || echo "oxigotchi: could not enable $unit (continuing)"
 done
