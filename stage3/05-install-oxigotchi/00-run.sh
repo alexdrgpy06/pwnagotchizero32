@@ -18,8 +18,11 @@ install -d -m 755 \
     "${ROOTFS_DIR}/var/lib/pwnagotchi/data" \
     "${ROOTFS_DIR}/usr/local/share/pwnagotchi/custom-plugins"
 
-# Copy the whole overlay (etc/, usr/, lib/) into the rootfs.
-cp -a files/. "${ROOTFS_DIR}/"
+# Copy the whole overlay (etc/, usr/, lib/) into the rootfs. Use rsync with
+# --keep-dirlinks so the overlay's lib/ directory is merged into the rootfs's
+# /lib symlink target (/usr/lib on merged-usr bookworm) instead of trying to
+# overwrite the symlink itself.
+rsync -a --keep-dirlinks files/ "${ROOTFS_DIR}/"
 
 # Make the daemon binary and helper scripts executable.
 chmod 755 "${ROOTFS_DIR}/usr/local/bin/oxigotchi"
