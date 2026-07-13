@@ -108,6 +108,9 @@ jobs:
           mkdir -p stage3/05-install-oxigotchi/files/usr/local/bin
           find rust/target -name oxigotchi -type f -exec cp {} stage3/05-install-oxigotchi/files/usr/local/bin/oxigotchi \;
       
+      - name: Install QEMU for pi-gen
+        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support qemu-user-binfmt
+      
       - name: Build image with pi-gen (Docker)
         run: |
           git clone --depth 1 https://github.com/RPi-Distro/pi-gen.git pi-gen
