@@ -89,6 +89,7 @@ jobs:
     needs: build-rust
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
         arch: [32bit, 64bit]
     # The nexmon firmware build runs under qemu emulation and adds a good chunk

@@ -18,8 +18,19 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
     git build-essential gcc-arm-none-eabi \
-    autoconf automake libtool texinfo bison flex pkg-config \
+    autoconf automake libtool texinfo bison flex libfl-dev pkg-config \
     libgmp3-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev
+
+# The nexmon b43 assembler links the lex library via the legacy "-ll" flag,
+# but modern flex only ships libfl (no libl). Provide a libl.a -> libfl.a
+# compatibility symlink so the link succeeds (arch-independent lookup).
+LIBFL="$(find /usr/lib -name 'libfl.a' 2>/dev/null | head -1)"
+if [ -n "$LIBFL" ]; then
+    ln -sf "$LIBFL" "$(dirname "$LIBFL")/libl.a"
+    echo "nexmon: linked $(dirname "$LIBFL")/libl.a -> $LIBFL"
+else
+    echo "nexmon: WARNING libfl.a not found; b43 assembler link may fail" >&2
+fi
 
 FWDIR=/usr/lib/firmware/brcm
 SRC=/usr/local/src/nexmon
