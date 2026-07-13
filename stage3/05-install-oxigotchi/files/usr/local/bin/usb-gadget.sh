@@ -1,8 +1,10 @@
 #!/bin/bash
-# usb-gadget.sh - Build a Windows-friendly RNDIS USB-ethernet gadget via
-# configfs, so the Pi appears as a proper network adapter (not a COM port)
-# when plugged into a host's USB data port. RNDIS + Microsoft OS descriptors
-# let Windows 10/11 auto-install the driver; macOS/Linux also accept RNDIS.
+# usb-gadget.sh - Build a CDC-NCM USB-ethernet gadget via configfs, so the Pi
+# appears as a network adapter over the USB data port.
+#
+# NCM is natively supported by Windows 10 (1809+) / 11, macOS and Linux with no
+# driver install. We use it because g_ether/CDC-ECM shows up as a serial COM
+# port on Windows, and modern Windows blocks automatic RNDIS driver install.
 
 set -e
 
@@ -33,7 +35,7 @@ echo 0x0104 > idProduct           # Multifunction Composite Gadget
 echo 0x0100 > bcdDevice
 echo 0x0200 > bcdUSB
 
-# Composite class + IAD — required for Windows to load the RNDIS driver.
+# Communications device class with IAD (NCM presents a control + data iface).
 echo 0xEF > bDeviceClass
 echo 0x02 > bDeviceSubClass
 echo 0x01 > bDeviceProtocol
@@ -44,26 +46,18 @@ echo "oxigotchi"        > strings/0x409/manufacturer
 echo "oxigotchi USB"    > strings/0x409/product
 
 mkdir -p configs/c.1/strings/0x409
-echo "RNDIS" > configs/c.1/strings/0x409/configuration
-echo 250     > configs/c.1/MaxPower
+echo "CDC-NCM" > configs/c.1/strings/0x409/configuration
+echo 250       > configs/c.1/MaxPower
 
-# Microsoft OS descriptors -> Windows silently installs the RNDIS driver.
-echo 1       > os_desc/use
-echo 0xcd    > os_desc/b_vendor_code
-echo MSFT100 > os_desc/qw_sign
-
-mkdir -p functions/rndis.usb0
+mkdir -p functions/ncm.usb0
 # Fixed locally-administered MACs so the interface name/IP stay stable.
-echo "42:61:64:55:53:42" > functions/rndis.usb0/host_addr
-echo "42:61:64:55:53:43" > functions/rndis.usb0/dev_addr
-echo RNDIS   > functions/rndis.usb0/os_desc/interface.rndis/compatible_id
-echo 5162001 > functions/rndis.usb0/os_desc/interface.rndis/sub_compatible_id
+echo "42:61:64:55:53:42" > functions/ncm.usb0/host_addr
+echo "42:61:64:55:53:43" > functions/ncm.usb0/dev_addr
 
-ln -s functions/rndis.usb0 configs/c.1/
-ln -s configs/c.1 os_desc/
+ln -s functions/ncm.usb0 configs/c.1/
 
 udevadm settle -t 5 2>/dev/null || true
 echo "${UDC}" > UDC
 
-echo "usb-gadget: RNDIS gadget bound to ${UDC}"
+echo "usb-gadget: CDC-NCM gadget bound to ${UDC}"
 exit 0
