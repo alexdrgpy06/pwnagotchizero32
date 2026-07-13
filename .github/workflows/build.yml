@@ -27,7 +27,7 @@ env:
 jobs:
   build-rust:
     name: Cross-compile Rust (${{ matrix.arch }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         arch: [32bit, 64bit]
@@ -86,7 +86,7 @@ jobs:
   build-image:
     name: Build SD Image (${{ matrix.arch }})
     needs: build-rust
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         arch: [32bit, 64bit]
@@ -109,7 +109,7 @@ jobs:
           find rust/target -name oxigotchi -type f -exec cp {} stage3/05-install-oxigotchi/files/usr/local/bin/oxigotchi \;
       
       - name: Install QEMU for pi-gen
-        run: sudo apt-get update && sudo apt-get install -y qemu-user-static
+        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support qemu-user-binfmt
       
       - name: Build image with pi-gen (Docker)
         run: |
@@ -142,7 +142,7 @@ jobs:
     name: Create Release
     needs: build-image
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
