@@ -110,18 +110,15 @@ jobs:
       
       - name: Build image with pi-gen (Docker)
         run: |
-          docker run --rm --privileged \
-            -v ${{ github.workspace }}:/workspace \
-            -v ${{ github.workspace }}/output:/output \
-            -e IMG_NAME="net-monitor-zero-${{ matrix.arch }}-${{ github.ref_name }}" \
-            -e DEPLOY_DIR=/output \
-            -e DEPLOY_COMPRESSION=xz \
-            -w /workspace \
-            ghcr.io/raspberrypi/pi-gen:latest \
-            bash -c "
-              cp /workspace/config/config-${{ matrix.arch }} config
-              ./build-docker.sh
-            "
+          git clone --depth 1 https://github.com/RPi-Distro/pi-gen.git pi-gen
+          rsync -a --delete stage3/ pi-gen/stage3/
+          cp config/config-${{ matrix.arch }} pi-gen/config
+          echo "IMG_NAME=net-monitor-zero-${{ matrix.arch }}-${{ github.ref_name }}" >> pi-gen/config
+          echo "DEPLOY_COMPRESSION=xz" >> pi-gen/config
+          cd pi-gen
+          ./build-docker.sh
+          mkdir -p ../output
+          cp deploy/*.img.xz ../output/ || true
       
       - name: Verify image
         run: |
