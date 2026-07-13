@@ -117,6 +117,10 @@ impl Personality {
         self.state.mood
     }
 
+    pub fn blind_epochs(&self) -> u32 {
+        self.state.blind_epochs
+    }
+
     pub fn update_on_handshake(&mut self) {
         self.state.handshakes_captured += 1;
         self.state.xp += 100;

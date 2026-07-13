@@ -84,7 +84,7 @@
                 <h2>WiFi</h2>
                 <div class="stat">
                     <span class="stat-label">Handshakes</span>
-                    <span class="stat-value good" x-text="handshakes"></span>
+                    <span class="stat-value good" x-text="handshakeCount"></span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">APs Found</span>
@@ -125,7 +125,7 @@
             <div class="card" style="grid-column: 1 / -1;">
                 <h2>Recent Handshakes <button class="btn" @click="loadHandshakes" style="float: right; font-size: 0.7rem;">Refresh</button></h2>
                 <div class="handshake-list" id="handshakes">
-                    <template x-for="hs in handshakes" :key="hs.path">
+                    <template x-for="hs in handshakeList" :key="hs.path">
                         <div class="handshake-item">
                             <div class="handshake-info">
                                 <span class="handshake-ap" x-text="hs.ap"></span>
@@ -134,7 +134,7 @@
                             <a :href="'/api/handshakes/download/' + hs.path" class="btn" style="align-self: center;">Download</a>
                         </div>
                     </template>
-                    <div x-show="handshakes.length === 0" style="text-align: center; padding: 20px; color: #666;">
+                    <div x-show="handshakeList.length === 0" style="text-align: center; padding: 20px; color: #666;">
                         No handshakes captured yet
                     </div>
                 </div>
@@ -152,7 +152,7 @@
                 face: '(•‿‿•)',
                 mood: 'happy',
                 epoch: 0,
-                handshakes: 0,
+                handshakeCount: 0,
                 apsFound: 0,
                 channel: 1,
                 blindEpochs: 0,
@@ -165,50 +165,60 @@
                 ramUsed: 0,
                 ramTotal: 512,
                 btConnected: false,
-                handshakes: [],
-                
+                handshakeList: [],
+
                 async init() {
                     await this.refresh();
+                    await this.loadHandshakes();
                     // Poll every 5 seconds
                     setInterval(() => this.refresh(), 5000);
                     // WebSocket for live updates
                     this.connectWS();
                 },
-                
+
+                applyStatus(data) {
+                    this.epoch = data.epoch;
+                    this.mood = data.mood;
+                    if (data.face) this.face = data.face;
+                    this.handshakeCount = data.handshakes;
+                    this.apsFound = data.aps_found;
+                    this.channel = data.channel;
+                    this.blindEpochs = data.blind_epochs;
+                    this.level = data.level;
+                    this.xp = data.xp;
+                    this.battery = data.battery;
+                    this.charging = data.charging;
+                    this.cpuTemp = Math.round(data.cpu_temp);
+                    this.ramUsed = data.ram_used;
+                    this.ramTotal = data.ram_total;
+                    this.btConnected = data.bluetooth;
+                    this.uptime = this.formatUptime(data.uptime);
+                },
+
                 async refresh() {
                     try {
                         const resp = await fetch('/api/status');
-                        const data = await resp.json();
-                        this.epoch = data.epoch;
-                        this.mood = data.mood;
-                        this.handshakes = data.handshakes;
-                        this.battery = data.battery;
-                        this.btConnected = data.bluetooth;
-                        this.uptime = this.formatUptime(data.uptime);
+                        this.applyStatus(await resp.json());
                     } catch (e) {
                         console.error('Status fetch failed:', e);
                     }
                 },
-                
+
                 async loadHandshakes() {
                     try {
                         const resp = await fetch('/api/handshakes');
-                        this.handshakes = await resp.json();
+                        this.handshakeList = await resp.json();
                     } catch (e) {
                         console.error('Handshakes fetch failed:', e);
                     }
                 },
-                
+
                 connectWS() {
                     const ws = new WebSocket(`ws://${location.host}/ws`);
                     ws.onmessage = (event) => {
                         const data = JSON.parse(event.data);
                         if (data.type === 'status') {
-                            this.epoch = data.epoch;
-                            this.mood = data.mood;
-                            this.face = data.face;
-                            this.handshakes = data.handshakes;
-                            this.battery = data.battery;
+                            this.applyStatus(data);
                         } else if (data.type === 'handshake') {
                             this.loadHandshakes();
                         }

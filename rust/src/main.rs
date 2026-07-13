@@ -75,10 +75,12 @@ async fn main() -> Result<()> {
     let web = web::WebServer::new(&config).await?;
 
     // --- Web server (background) -------------------------------------------
+    // Shares the same live snapshot the epoch loop publishes into.
     if config.ui.web.enabled {
         let wc = config.clone();
+        let status = web.status_handle();
         tokio::spawn(async move {
-            if let Err(e) = web::WebServer::start_with(wc).await {
+            if let Err(e) = web::WebServer::serve(wc, status).await {
                 tracing::error!("web: {e}");
             }
         });

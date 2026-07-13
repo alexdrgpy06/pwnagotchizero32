@@ -2,7 +2,9 @@
 
 use anyhow::Result;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use crate::web::{read_system_metrics, SharedStatus};
 
 use crate::attacks::AttackEngine;
 use crate::bluetooth::BluetoothManager;
@@ -28,6 +30,8 @@ pub struct EpochLoop {
     recovery: RecoveryManager,
     plugins: PluginManager,
     web: WebServer,
+    status: SharedStatus,
+    start: Instant,
     epoch: u64,
     running: bool,
 }
@@ -47,6 +51,7 @@ impl EpochLoop {
         plugins: PluginManager,
         web: WebServer,
     ) -> Result<Self> {
+        let status = web.status_handle();
         Ok(Self {
             config,
             display,
@@ -59,6 +64,8 @@ impl EpochLoop {
             recovery,
             plugins,
             web,
+            status,
+            start: Instant::now(),
             epoch: 0,
             running: true,
         })
@@ -110,11 +117,41 @@ impl EpochLoop {
         // Phase 5: maintenance
         self.maintenance()?;
 
+        // Publish live snapshot for the web dashboard
+        self.publish_status();
+
         // Notify plugins
         let status = self.build_status();
         self.plugins.on_epoch(self.epoch, &status)?;
 
         Ok(())
+    }
+
+    /// Push the current runtime state into the shared snapshot the web
+    /// dashboard reads from.
+    fn publish_status(&self) {
+        let stats = self.personality.get_stats();
+        let (cpu_temp, ram_used, ram_total) = read_system_metrics();
+
+        if let Ok(mut snap) = self.status.write() {
+            snap.epoch = self.epoch;
+            snap.mood = format!("{:?}", stats.mood).to_lowercase();
+            snap.face = self.personality.get_face(stats.mood);
+            snap.handshakes = stats.handshakes;
+            snap.aps_found = self.wifi.get_aps().len();
+            snap.channel = self.wifi.current_channel();
+            snap.blind_epochs = self.personality.blind_epochs();
+            snap.level = stats.level;
+            snap.xp = stats.xp;
+            snap.battery = self.pisugar.battery_percent();
+            snap.charging = self.pisugar.is_charging();
+            snap.bluetooth = self.bluetooth.is_connected();
+            snap.bt_device = self.bluetooth.current_device().map(str::to_string);
+            snap.cpu_temp = cpu_temp;
+            snap.ram_used = ram_used;
+            snap.ram_total = ram_total;
+            snap.uptime = self.start.elapsed().as_secs();
+        }
     }
 
     fn update_display(&mut self) -> Result<()> {

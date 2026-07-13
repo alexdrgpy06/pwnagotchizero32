@@ -150,4 +150,32 @@ jobs:
       
       - name: Upload image
         uses: actions/upload-artifact@v4
-  
+        with:
+          name: net-monitor-zero-${{ matrix.arch }}-${{ github.ref_name }}
+          path: output/*.img.xz
+          retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build-image
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/net-monitor-zero-32bit-${{ github.ref_name }}/*.img.xz
+            artifacts/net-monitor-zero-32bit-${{ github.ref_name }}/*.img.xz.sha256
+            artifacts/net-monitor-zero-64bit-${{ github.ref_name }}/*.img.xz
+            artifacts/net-monitor-zero-64bit-${{ github.ref_name }}/*.img.xz.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
