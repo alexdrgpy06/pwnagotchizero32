@@ -24,8 +24,7 @@ RUN apt-get update && apt-get install -y \
     python3-venv \
     lua5.4 \
     liblua5.4-dev \
-    cargo \
-    rustup \
+
     gcc-arm-linux-gnueabihf \
     gcc-aarch64-linux-gnu \
     libc6-dev-armhf-cross \

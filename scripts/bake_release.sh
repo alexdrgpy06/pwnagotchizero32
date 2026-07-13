@@ -6,9 +6,9 @@ set -euo pipefail
 
 ARCH="32bit"
 RELEASE="dev"
-WORK_DIR="/home/pi/work"
-DEPLOY_DIR="/home/pi/images"
-PI_GEN_DIR="/home/pi/pi-gen"
+WORK_DIR="${WORK_DIR:-/workspace/work}"
+DEPLOY_DIR="${DEPLOY_DIR:-/workspace/output}"
+PI_GEN_DIR="${PI_GEN_DIR:-/pi-gen}"
 
 usage() {
     echo "Usage: $0 --arch 32bit|64bit --release VERSION"
