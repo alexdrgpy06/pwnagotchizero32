@@ -1,0 +1,9 @@
+# Shell scripts and pi-gen stage files must stay LF — they run in a Linux
+# chroot during the image build; CRLF would break bash.
+*.sh text eol=lf
+stage3/prerun.sh text eol=lf
+stage3/**/*.sh text eol=lf
+stage3/EXPORT_IMAGE text eol=lf
+
+# Prebuilt binary placeholder must never be line-ending munged.
+stage3/05-install-oxigotchi/files/usr/local/bin/oxigotchi binary
