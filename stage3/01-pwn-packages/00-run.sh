@@ -9,11 +9,14 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
     libpcap0.8 \
+    aircrack-ng \
+    firmware-brcm80211 \
     bluez \
     bluez-tools \
     dbus \
     network-manager \
     i2c-tools \
+    python3-smbus \
     iw \
     wireless-tools \
     lua5.4 \

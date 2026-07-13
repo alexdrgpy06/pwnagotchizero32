@@ -18,9 +18,15 @@ if ! grep -q "# --- oxigotchi ---" "${CONFIG_TXT}"; then
 # --- oxigotchi ---
 dtparam=spi=on
 dtparam=i2c_arm=on
-# Free the PL011 UART for the Bluetooth chip (BT PAN tether)
-dtoverlay=disable-bt
-gpu_mem=64
+dtparam=i2c1=on
+enable_uart=1
+# USB gadget (usb0) fallback networking
+dtoverlay=dwc2
+gpu_mem=16
+# Bluetooth is left ENABLED — BT PAN tethering depends on it.
+[pi0]
+dtoverlay=spi0-2cs
+[all]
 # --- end oxigotchi ---
 EOF
 fi
