@@ -88,9 +88,15 @@ fn read_meminfo() -> Option<(u64, u64)> {
     let mut available_kb = None;
     for line in text.lines() {
         if let Some(rest) = line.strip_prefix("MemTotal:") {
-            total_kb = rest.split_whitespace().next().and_then(|v| v.parse::<u64>().ok());
+            total_kb = rest
+                .split_whitespace()
+                .next()
+                .and_then(|v| v.parse::<u64>().ok());
         } else if let Some(rest) = line.strip_prefix("MemAvailable:") {
-            available_kb = rest.split_whitespace().next().and_then(|v| v.parse::<u64>().ok());
+            available_kb = rest
+                .split_whitespace()
+                .next()
+                .and_then(|v| v.parse::<u64>().ok());
         }
         if total_kb.is_some() && available_kb.is_some() {
             break;

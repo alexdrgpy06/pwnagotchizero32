@@ -155,6 +155,10 @@ impl EpochLoop {
     }
 
     fn update_display(&mut self) -> Result<()> {
+        // Start from a blank frame; drawing only sets black pixels, so without
+        // this the previous face and status text would remain underneath.
+        self.display.clear()?;
+
         let stats = self.personality.get_stats();
         let mood_str = format!("{:?}", stats.mood).to_lowercase();
         self.display.draw_face(&mood_str);
@@ -163,13 +167,22 @@ impl EpochLoop {
             "Epoch:{} HS:{} BT:{} Bat:{}%",
             self.epoch,
             stats.handshakes,
-            if self.bluetooth.is_connected() { "↑" } else { "↓" },
+            if self.bluetooth.is_connected() {
+                "on"
+            } else {
+                "off"
+            },
             self.pisugar.battery_percent(),
         );
         self.display.draw_status_line(100, &status)?;
 
-        // Partial refresh most epochs, full every 10
-        let partial = self.epoch % 10 != 0;
+        // Partial refresh most epochs; force a full (de-ghosting) refresh on
+        // the first epoch and every `display_full_refresh_interval` after, or
+        // always-full when partial refresh is disabled in config.
+        let cfg = &self.config.oxigotchi;
+        let interval = cfg.display_full_refresh_interval;
+        let due_full = interval != 0 && self.epoch % interval == 0;
+        let partial = cfg.display_partial_refresh && !due_full;
         self.display.update(partial)?;
 
         Ok(())

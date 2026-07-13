@@ -128,8 +128,10 @@ impl PiSugar {
     }
 
     pub async fn set_watchdog(&mut self, seconds: u16) -> Result<()> {
-        self.write_reg(reg::WATCHDOG, (seconds & 0xFF) as u8).await?;
-        self.write_reg(reg::WATCHDOG + 1, ((seconds >> 8) & 0xFF) as u8).await?;
+        self.write_reg(reg::WATCHDOG, (seconds & 0xFF) as u8)
+            .await?;
+        self.write_reg(reg::WATCHDOG + 1, ((seconds >> 8) & 0xFF) as u8)
+            .await?;
         Ok(())
     }
 

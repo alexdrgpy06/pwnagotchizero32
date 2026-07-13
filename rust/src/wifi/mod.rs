@@ -39,7 +39,7 @@ impl WifiManager {
     pub async fn new(config: &Arc<Config>) -> Result<Self> {
         let interface = config.main.iface.clone();
         let monitor_interface = format!("{}mon", interface.trim_end_matches("mon"));
-        
+
         Ok(Self {
             config: config.clone(),
             interface: interface.clone(),
@@ -49,65 +49,93 @@ impl WifiManager {
             client_list: Vec::new(),
         })
     }
-    
+
     pub async fn start_monitor_mode(&mut self) -> Result<()> {
         // Stop any existing monitor mode
         self.stop_monitor_mode().await.ok();
-        
+
         // Bring interface down
-        self.run_cmd("ip", &["link", "set", &self.interface, "down"]).await?;
-        
+        self.run_cmd("ip", &["link", "set", &self.interface, "down"])
+            .await?;
+
         // Set monitor mode
-        self.run_cmd("iw", &["dev", &self.interface, "set", "type", "monitor"]).await?;
-        
+        self.run_cmd("iw", &["dev", &self.interface, "set", "type", "monitor"])
+            .await?;
+
         // Bring up
-        self.run_cmd("ip", &["link", "set", &self.monitor_interface, "up"]).await?;
-        
+        self.run_cmd("ip", &["link", "set", &self.monitor_interface, "up"])
+            .await?;
+
         // Set initial channel
         self.set_channel(1).await?;
-        
+
         Ok(())
     }
-    
+
     pub async fn stop_monitor_mode(&mut self) -> Result<()> {
-        self.run_cmd("ip", &["link", "set", &self.monitor_interface, "down"]).await.ok();
-        self.run_cmd("iw", &["dev", &self.monitor_interface, "set", "type", "managed"]).await.ok();
-        self.run_cmd("ip", &["link", "set", &self.interface, "up"]).await.ok();
+        self.run_cmd("ip", &["link", "set", &self.monitor_interface, "down"])
+            .await
+            .ok();
+        self.run_cmd(
+            "iw",
+            &["dev", &self.monitor_interface, "set", "type", "managed"],
+        )
+        .await
+        .ok();
+        self.run_cmd("ip", &["link", "set", &self.interface, "up"])
+            .await
+            .ok();
         Ok(())
     }
-    
+
     pub async fn set_channel(&mut self, channel: u8) -> Result<()> {
         if channel < 1 || channel > 13 {
             anyhow::bail!("Invalid channel: {}", channel);
         }
-        
-        self.run_cmd("iw", &["dev", &self.monitor_interface, "set", "freq", &format!("{}", 2407u16 + channel as u16 * 5)]).await?;
+
+        self.run_cmd(
+            "iw",
+            &[
+                "dev",
+                &self.monitor_interface,
+                "set",
+                "freq",
+                &format!("{}", 2407u16 + channel as u16 * 5),
+            ],
+        )
+        .await?;
         self.current_channel = channel;
         Ok(())
     }
-    
+
     pub async fn hop_channel(&mut self) -> Result<()> {
         let channels = [1, 6, 11, 2, 7, 12, 3, 8, 13, 4, 9, 5, 10];
-        let next = channels.iter().find(|&&c| c != self.current_channel).copied().unwrap_or(1);
+        let next = channels
+            .iter()
+            .find(|&&c| c != self.current_channel)
+            .copied()
+            .unwrap_or(1);
         self.set_channel(next).await
     }
-    
+
     pub async fn scan(&mut self, duration: Duration) -> Result<Vec<AccessPoint>> {
         // Use iw to scan
-        let output = self.run_cmd_capture("iw", &["dev", &self.monitor_interface, "scan"]).await?;
-        
+        let output = self
+            .run_cmd_capture("iw", &["dev", &self.monitor_interface, "scan"])
+            .await?;
+
         // Parse scan results (simplified)
         self.ap_list = self.parse_scan_results(&output);
         Ok(self.ap_list.clone())
     }
-    
+
     fn parse_scan_results(&self, output: &str) -> Vec<AccessPoint> {
         let mut aps = Vec::new();
         let mut current_ap: Option<AccessPoint> = None;
-        
+
         for line in output.lines() {
             let line = line.trim();
-            
+
             if line.starts_with("BSS ") {
                 if let Some(ap) = current_ap.take() {
                     aps.push(ap);
@@ -137,34 +165,36 @@ impl WifiManager {
                 }
             }
         }
-        
+
         if let Some(ap) = current_ap {
             aps.push(ap);
         }
-        
+
         aps
     }
-    
+
     fn freq_to_channel(freq: u32) -> u8 {
-        if freq == 2484 { return 14; }
+        if freq == 2484 {
+            return 14;
+        }
         if freq >= 2412 && freq <= 2472 {
             return ((freq - 2412) / 5 + 1) as u8;
         }
         1
     }
-    
+
     pub fn current_channel(&self) -> u8 {
         self.current_channel
     }
-    
+
     pub fn get_aps(&self) -> &[AccessPoint] {
         &self.ap_list
     }
-    
+
     pub fn get_clients(&self) -> &[Client] {
         &self.client_list
     }
-    
+
     pub fn is_whitelisted(&self, ssid: &str, bssid: &str) -> bool {
         for entry in &self.config.main.whitelist {
             if entry == ssid || entry == bssid {
@@ -177,7 +207,7 @@ impl WifiManager {
         }
         false
     }
-    
+
     async fn run_cmd(&self, cmd: &str, args: &[&str]) -> Result<()> {
         let status = Command::new(cmd).args(args).status()?;
         if !status.success() {
@@ -185,7 +215,7 @@ impl WifiManager {
         }
         Ok(())
     }
-    
+
     async fn run_cmd_capture(&self, cmd: &str, args: &[&str]) -> Result<String> {
         let output = Command::new(cmd).args(args).output()?;
         Ok(String::from_utf8_lossy(&output.stdout).to_string())

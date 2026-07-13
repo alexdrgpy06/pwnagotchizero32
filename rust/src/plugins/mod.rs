@@ -16,13 +16,33 @@ pub struct PluginManager {
 #[allow(unused_variables)]
 pub trait NativePlugin: Send + Sync {
     fn name(&self) -> &str;
-    fn version(&self) -> &str { "1.0.0" }
-    fn on_loaded(&mut self, ctx: &PluginContext) -> Result<()> { Ok(()) }
-    fn on_unload(&mut self) -> Result<()> { Ok(()) }
-    fn on_epoch(&mut self, ctx: &PluginContext, epoch: u64, status: &EpochStatus) -> Result<()> { Ok(()) }
-    fn on_handshake(&mut self, ctx: &PluginContext, path: &Path, ap: &AccessPoint, client: &Client) -> Result<()> { Ok(()) }
-    fn on_internet_available(&mut self, ctx: &PluginContext) -> Result<()> { Ok(()) }
-    fn on_ui_update(&mut self, ui: &mut UiContext) -> Result<()> { Ok(()) }
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
+    fn on_loaded(&mut self, ctx: &PluginContext) -> Result<()> {
+        Ok(())
+    }
+    fn on_unload(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn on_epoch(&mut self, ctx: &PluginContext, epoch: u64, status: &EpochStatus) -> Result<()> {
+        Ok(())
+    }
+    fn on_handshake(
+        &mut self,
+        ctx: &PluginContext,
+        path: &Path,
+        ap: &AccessPoint,
+        client: &Client,
+    ) -> Result<()> {
+        Ok(())
+    }
+    fn on_internet_available(&mut self, ctx: &PluginContext) -> Result<()> {
+        Ok(())
+    }
+    fn on_ui_update(&mut self, ui: &mut UiContext) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub struct PluginContext {

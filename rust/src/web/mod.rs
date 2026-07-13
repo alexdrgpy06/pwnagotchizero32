@@ -53,13 +53,19 @@ impl WebServer {
 
     /// Run the HTTP/WebSocket server. Spawn this on its own task.
     pub async fn serve(config: Arc<Config>, status: SharedStatus) -> Result<()> {
-        let state = AppState { config: config.clone(), status };
+        let state = AppState {
+            config: config.clone(),
+            status,
+        };
 
         let router = Router::new()
             .route("/", get(dashboard))
             .route("/api/status", get(api_status))
             .route("/api/handshakes", get(api_handshakes))
-            .route("/api/handshakes/download/{file}", get(api_handshake_download))
+            .route(
+                "/api/handshakes/download/{file}",
+                get(api_handshake_download),
+            )
             .route("/api/shutdown", post(api_shutdown))
             .route("/api/reboot", post(api_reboot))
             .route("/ws", get(ws_upgrade))

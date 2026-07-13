@@ -96,7 +96,11 @@ impl Personality {
             face_history: Vec::new(),
         };
 
-        Ok(Self { config: config.clone(), state, faces })
+        Ok(Self {
+            config: config.clone(),
+            state,
+            faces,
+        })
     }
 
     pub fn get_face(&self, mood: Mood) -> String {

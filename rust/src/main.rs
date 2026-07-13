@@ -6,19 +6,19 @@ use crate::config::Config;
 use crate::display::Display;
 use crate::epoch::EpochLoop;
 
+mod attacks;
+mod bluetooth;
+mod capture;
 mod config;
 mod display;
 mod epoch;
-mod wifi;
-mod attacks;
-mod capture;
-mod personality;
-mod bluetooth;
-mod pisugar;
-mod recovery;
-mod plugins;
-mod web;
 mod migration;
+mod personality;
+mod pisugar;
+mod plugins;
+mod recovery;
+mod web;
+mod wifi;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -88,8 +88,17 @@ async fn main() -> Result<()> {
 
     // --- Epoch loop --------------------------------------------------------
     let mut epoch_loop = EpochLoop::new(
-        config, display, wifi, attacks, captures, personality,
-        bluetooth, pisugar, recovery, plugins, web,
+        config,
+        display,
+        wifi,
+        attacks,
+        captures,
+        personality,
+        bluetooth,
+        pisugar,
+        recovery,
+        plugins,
+        web,
     )
     .await?;
 
