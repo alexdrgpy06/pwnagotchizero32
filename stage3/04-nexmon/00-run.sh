@@ -16,10 +16,13 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
+# Full nexmon build dependency set (per the nexmon README + jayofelony), added
+# in one shot to avoid discovering missing tools one CI cycle at a time.
 apt-get install -y --no-install-recommends \
-    git build-essential gcc-arm-none-eabi xxd \
+    git build-essential gcc-arm-none-eabi \
+    gawk xxd qpdf bc \
     autoconf automake libtool texinfo bison flex libfl-dev pkg-config \
-    libgmp3-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev
+    libgmp3-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev libssl-dev
 
 # The nexmon b43 assembler links the lex library via the legacy "-ll" flag,
 # but modern flex only ships libfl (no libl). Provide a libl.a -> libfl.a
