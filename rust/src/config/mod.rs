@@ -507,7 +507,10 @@ pub struct WebUiConfig {
 }
 
 fn default_web_address() -> String {
-    "::".to_string()
+    // Bind all IPv4 interfaces. Note: "::" would format to the invalid
+    // ":::8080" (IPv6 needs brackets) and fail to bind. 0.0.0.0 is reachable
+    // over the usb0 gadget network at 10.0.0.2:8080.
+    "0.0.0.0".to_string()
 }
 fn default_web_user() -> String {
     "changeme".to_string()

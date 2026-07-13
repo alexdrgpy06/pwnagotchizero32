@@ -180,7 +180,7 @@ associate = false
 
 [ui.web]
 enabled = true
-address = "::"
+address = "0.0.0.0"
 port = 8080
 auth = false
 username = "changeme"

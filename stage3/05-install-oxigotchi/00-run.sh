@@ -24,6 +24,12 @@ install -d -m 755 \
 # overwrite the symlink itself.
 rsync -a --keep-dirlinks files/ "${ROOTFS_DIR}/"
 
+# NetworkManager refuses connection profiles that aren't root-owned mode 0600.
+if [ -f "${ROOTFS_DIR}/etc/NetworkManager/system-connections/usb0.nmconnection" ]; then
+    chmod 600 "${ROOTFS_DIR}/etc/NetworkManager/system-connections/usb0.nmconnection"
+    chown 0:0 "${ROOTFS_DIR}/etc/NetworkManager/system-connections/usb0.nmconnection"
+fi
+
 # Make the daemon binary and helper scripts executable.
 chmod 755 "${ROOTFS_DIR}/usr/local/bin/oxigotchi"
 chmod 755 "${ROOTFS_DIR}"/usr/local/bin/*.sh 2>/dev/null || true
@@ -61,6 +67,8 @@ for unit in oxigotchi.service zram-log.service zram-data.service \
     systemctl enable "$unit" && echo "enabled $unit" || echo "oxigotchi: could not enable $unit (continuing)"
 done
 systemctl enable NetworkManager.service 2>/dev/null || true
+# Ensure SSH is up so the device is reachable over the USB-gadget network.
+systemctl enable ssh.service 2>/dev/null || systemctl enable sshd.service 2>/dev/null || true
 EOF
 
 echo "oxigotchi installation complete"

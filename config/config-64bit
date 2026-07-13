@@ -2,3 +2,11 @@ IMG_NAME="net-monitor-zero-64bit"
 DEPLOY_COMPRESSION="xz"
 STAGE_LIST="stage0 stage1 stage2 stage3"
 ARCH="arm64"
+
+# Access: enable SSH and a known default login so a headless device is
+# reachable (over the USB-gadget network set up in stage3). Change the
+# password after first boot.
+ENABLE_SSH=1
+FIRST_USER_NAME="pi"
+FIRST_USER_PASS="raspberry"
+DISABLE_FIRST_BOOT_USER_RENAME=1

@@ -191,8 +191,12 @@ impl EpochLoop {
     fn maintenance(&mut self) -> Result<()> {
         // PiSugar
         let _ = futures::executor::block_on(self.pisugar.update());
-        // Low battery shutdown
-        if self.pisugar.battery_percent() < 10 && !self.pisugar.is_charging() {
+        // Low battery shutdown — only when a PiSugar is actually present, so a
+        // missing/unreadable UPS can never shut the device down on a phantom 0%.
+        if self.pisugar.is_present()
+            && self.pisugar.battery_percent() < 10
+            && !self.pisugar.is_charging()
+        {
             tracing::warn!("low battery, shutting down");
             let _ = self.shutdown();
         }

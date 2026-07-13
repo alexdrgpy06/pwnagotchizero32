@@ -15,6 +15,8 @@ apt-get install -y --no-install-recommends \
     bluez-tools \
     dbus \
     network-manager \
+    dnsmasq-base \
+    openssh-server \
     i2c-tools \
     python3-smbus \
     iw \
