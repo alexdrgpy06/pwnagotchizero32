@@ -17,7 +17,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
 apt-get install -y --no-install-recommends \
-    git build-essential gcc-arm-none-eabi \
+    git build-essential gcc-arm-none-eabi xxd \
     autoconf automake libtool texinfo bison flex libfl-dev pkg-config \
     libgmp3-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev
 
