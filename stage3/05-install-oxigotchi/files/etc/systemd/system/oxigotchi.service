@@ -1,12 +1,15 @@
 [Unit]
 Description=Pwnagotchi Zero Core Daemon
-After=network-online.target bluetooth.target zram-log.service zram-data.service
-Wants=network-online.target zram-log.service zram-data.service
+After=network-online.target bluetooth.target
+Wants=network-online.target
 StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Service]
-Type=notify
+# The daemon does not implement sd_notify, so Type=simple (not notify) and no
+# WatchdogSec — otherwise systemd waits for a readiness signal that never
+# arrives, kills the process on timeout, and gives up after a few retries.
+Type=simple
 ExecStart=/usr/local/bin/oxigotchi
 Restart=on-failure
 RestartSec=5
@@ -16,7 +19,6 @@ MemoryMax=200M
 CPUQuota=80%
 Environment=RUST_LOG=info
 Environment=RUST_BACKTRACE=1
-WatchdogSec=120
 
 [Install]
 WantedBy=multi-user.target
