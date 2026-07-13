@@ -101,12 +101,12 @@ jobs:
           path: rust/target/
       
       - name: Make binary executable
-        run: chmod +x rust/target/oxigotchi
+        run: find rust/target -name oxigotchi -type f -exec chmod +x {} \;
       
       - name: Copy binary to stage3
         run: |
           mkdir -p stage3/05-install-oxigotchi/files/usr/local/bin
-          cp rust/target/oxigotchi stage3/05-install-oxigotchi/files/usr/local/bin/oxigotchi
+          find rust/target -name oxigotchi -type f -exec cp {} stage3/05-install-oxigotchi/files/usr/local/bin/oxigotchi \;
       
       - name: Build image with pi-gen (Docker)
         run: |
