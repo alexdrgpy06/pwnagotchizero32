@@ -1,0 +1,7 @@
+#!/bin/bash
+# Put the Wi-Fi radio into monitor mode as wlan0mon.
+set -e
+ip link set wlan0 down
+iw dev wlan0 set type monitor
+ip link set wlan0 name wlan0mon 2>/dev/null || true
+ip link set wlan0mon up

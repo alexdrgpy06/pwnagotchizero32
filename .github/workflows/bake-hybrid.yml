@@ -1,0 +1,101 @@
+name: Bake hybrid image (pwnagotchi base + oxigotchi daemon)
+
+on:
+  push:
+    tags:
+      - 'hybrid-v*'
+  workflow_dispatch:
+    inputs:
+      base_image_url:
+        description: Base pwnagotchi image URL
+        default: https://github.com/jayofelony/pwnagotchi-bullseye/releases/download/v2.6.4/pwnagotchi-rpi-bullseye-2.6.4-armhf.img.xz
+
+env:
+  CARGO_TERM_COLOR: always
+  # v2.6.4, not the newer v2.8.4 "final" release: this exact version was
+  # directly verified booting AND driving the e-ink display on the target
+  # Pi Zero 2 W hardware (console + photo confirmed). Known-good beats newer.
+  BASE_IMAGE_URL: ${{ inputs.base_image_url || 'https://github.com/jayofelony/pwnagotchi-bullseye/releases/download/v2.6.4/pwnagotchi-rpi-bullseye-2.6.4-armhf.img.xz' }}
+
+jobs:
+  bake:
+    name: Bake hybrid image
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reclaim disk space
+        run: |
+          # The base pwnagotchi image can be large uncompressed; free runners
+          # have limited disk. Drop unneeded preinstalled SDKs to make room.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+              /usr/local/.ghcup /opt/hostedtoolcache/go /opt/hostedtoolcache/PyPy 2>/dev/null || true
+          df -h /
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: arm-unknown-linux-gnueabihf
+
+      - name: Install ARMv6 RPi toolchain
+        run: |
+          # Modern GCC built -march=armv6 with an old glibc (2.25) so the binary
+          # runs on the original Pi Zero AND the Zero 2 W, on Bullseye or Bookworm.
+          mkdir -p "$HOME/opt"
+          wget -qO- https://github.com/tttapa/toolchains/releases/latest/download/x-tools-armv6-rpi-linux-gnueabihf-gcc14.tar.xz | tar xJ -C "$HOME/opt"
+          GCC_DIR=$(dirname "$(find "$HOME/opt" -name 'armv6-rpi-linux-gnueabihf-gcc' -type f 2>/dev/null | head -1)")
+          test -n "$GCC_DIR"
+          echo "$GCC_DIR" >> "$GITHUB_PATH"
+
+      - name: Build daemon (ARMv6)
+        working-directory: ./rust
+        run: |
+          export CC_arm_unknown_linux_gnueabihf=armv6-rpi-linux-gnueabihf-gcc
+          cargo build --release --target arm-unknown-linux-gnueabihf
+
+      - name: Verify ARMv6
+        run: |
+          BIN=rust/target/arm-unknown-linux-gnueabihf/release/oxigotchi
+          sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends binutils-arm-linux-gnueabihf
+          arm-linux-gnueabihf-readelf -A "$BIN" | grep -E "Tag_CPU_arch:" || true
+          arm-linux-gnueabihf-readelf -A "$BIN" | grep -qiE "Tag_CPU_arch:\s*v7" && { echo "ERROR ARMv7"; exit 1; } || true
+
+      - name: Download base pwnagotchi image
+        run: |
+          mkdir -p base
+          wget -q -O base/base.img.xz "${BASE_IMAGE_URL}"
+          echo "compressed size: $(du -h base/base.img.xz | cut -f1)"
+          xz -d base/base.img.xz
+          echo "uncompressed size: $(du -h base/base.img | cut -f1)"
+          echo "== disk space after decompress =="
+          df -h /
+
+      - name: Set up qemu-arm-static for cross-arch chroot
+        run: |
+          sudo apt-get install -y --no-install-recommends qemu-user-static binfmt-support parted kpartx
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+      - name: Bake
+        run: |
+          sudo bash scripts/bake_on_pwnagotchi.sh \
+            base/base.img \
+            rust/target/arm-unknown-linux-gnueabihf/release/oxigotchi \
+            oxigotchi-hybrid.img
+
+      - name: Compress
+        run: |
+          xz -T0 -9 oxigotchi-hybrid.img
+          sha256sum oxigotchi-hybrid.img.xz > oxigotchi-hybrid.img.xz.sha256
+          ls -la oxigotchi-hybrid.img.xz*
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            oxigotchi-hybrid.img.xz
+            oxigotchi-hybrid.img.xz.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
