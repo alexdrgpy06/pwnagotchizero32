@@ -93,20 +93,28 @@ impl EpochLoop {
         self.plugins.on_epoch(self.epoch, &status).ok();
 
         while self.running {
-            self.run_epoch()?;
+            self.run_epoch().await?;
+            // The epoch's real yield point: without an .await here, this loop
+            // never returns control to the tokio scheduler, so the SIGTERM
+            // handler and web server tasks never get polled — the daemon
+            // becomes deaf to shutdown and systemd has to SIGKILL it after
+            // the full stop timeout. This also paces attacks/display updates
+            // to the configured epoch duration instead of running flat out.
+            let secs = self.config.oxigotchi.epoch_duration.max(1) as u64;
+            tokio::time::sleep(Duration::from_secs(secs)).await;
         }
 
         Ok(())
     }
 
-    fn run_epoch(&mut self) -> Result<()> {
+    async fn run_epoch(&mut self) -> Result<()> {
         self.epoch += 1;
 
         // Phase 1-2: scan + attack
         let aps = self.wifi.get_aps().to_vec();
         for ap in &aps {
             if !self.wifi.is_whitelisted(&ap.ssid, &ap.bssid) {
-                let _ = self.attacks.deauth(ap, None);
+                let _ = self.attacks.deauth(ap, None).await;
             }
         }
 
@@ -115,7 +123,7 @@ impl EpochLoop {
         self.update_display()?;
 
         // Phase 5: maintenance
-        self.maintenance()?;
+        self.maintenance().await?;
 
         // Publish live snapshot for the web dashboard
         self.publish_status();
@@ -188,9 +196,9 @@ impl EpochLoop {
         Ok(())
     }
 
-    fn maintenance(&mut self) -> Result<()> {
+    async fn maintenance(&mut self) -> Result<()> {
         // PiSugar
-        let _ = futures::executor::block_on(self.pisugar.update());
+        let _ = self.pisugar.update().await;
         // Low battery shutdown — only when a PiSugar is actually present, so a
         // missing/unreadable UPS can never shut the device down on a phantom 0%.
         if self.pisugar.is_present()
@@ -201,7 +209,7 @@ impl EpochLoop {
             let _ = self.shutdown();
         }
         // WiFi recovery check
-        let _ = futures::executor::block_on(self.recovery.check());
+        let _ = self.recovery.check().await;
         Ok(())
     }
 
