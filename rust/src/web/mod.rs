@@ -102,6 +102,7 @@ impl WebServer {
                 "/api/handshakes/download/{file}",
                 get(api_handshake_download),
             )
+            .route("/api/wpa-sec/results", get(api_wpa_sec_results))
             .route("/api/shutdown", post(api_shutdown))
             .route("/api/reboot", post(api_reboot))
             .route("/ws", get(ws_upgrade))
@@ -235,6 +236,31 @@ async fn api_handshake_download(
             .into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "not found").into_response(),
     }
+}
+
+/// Cracked passwords wpa-sec.lua downloads to its potfile (BSSID:STATION:
+/// ESSID:PASSWORD per line — the standard wpa-sec.stanev.org potfile
+/// format). Path matches the plugin's own hardcoded location exactly.
+async fn api_wpa_sec_results() -> Json<Vec<serde_json::Value>> {
+    const POTFILE: &str = "/etc/pwnagotchi/wpa-sec.potfile";
+    let mut out = Vec::new();
+
+    if let Ok(content) = tokio::fs::read_to_string(POTFILE).await {
+        for line in content.lines() {
+            let parts: Vec<&str> = line.splitn(4, ':').collect();
+            if let [bssid, station, essid, password] = parts[..] {
+                out.push(serde_json::json!({
+                    "bssid": bssid,
+                    "station": station,
+                    "essid": essid,
+                    "password": password,
+                }));
+            }
+        }
+    }
+
+    out.reverse(); // newest cracked result last in the file, show first
+    Json(out)
 }
 
 async fn api_shutdown() -> impl IntoResponse {

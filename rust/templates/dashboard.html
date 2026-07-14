@@ -46,6 +46,15 @@
         .rate-slider { width: 100%; margin: 10px 0; accent-color: #4ade80; }
         .rate-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: #888; }
         .attacks-note { font-size: 0.75rem; color: #666; margin-top: 10px; }
+        .system-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .system-actions .btn { flex: 1; text-align: center; padding: 12px; font-size: 0.9rem; }
+        .wpa-list { max-height: 300px; overflow-y: auto; }
+        .wpa-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #0f3460; gap: 10px; }
+        .wpa-item:last-child { border-bottom: none; }
+        .wpa-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .wpa-essid { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .wpa-meta { font-size: 0.8rem; color: #888; }
+        .wpa-password { font-family: monospace; background: #0f3460; padding: 4px 10px; border-radius: 4px; color: #4ade80; white-space: nowrap; }
         footer { margin-top: 30px; text-align: center; color: #555; font-size: 0.8rem; }
         @media (max-width: 600px) {
             .container { padding: 15px; }
@@ -195,6 +204,35 @@
             </div>
         </div>
 
+        <div class="grid" style="margin-top: 20px;">
+            <div class="card" style="grid-column: 1 / -1;">
+                <h2>
+                    WPA-SEC Results
+                    <button class="btn" @click="showPasswords = !showPasswords" style="float: right; font-size: 0.7rem; margin-left: 8px;" x-text="showPasswords ? 'Hide' : 'Show'"></button>
+                    <button class="btn" @click="loadWpaSecResults" style="float: right; font-size: 0.7rem;">Refresh</button>
+                </h2>
+                <div class="wpa-list">
+                    <template x-for="r in wpaSecResults" :key="r.bssid + r.essid">
+                        <div class="wpa-item">
+                            <div class="wpa-info">
+                                <span class="wpa-essid" x-text="r.essid"></span>
+                                <span class="wpa-meta" x-text="r.bssid"></span>
+                            </div>
+                            <span class="wpa-password" x-text="showPasswords ? r.password : '••••••••'"></span>
+                        </div>
+                    </template>
+                    <div x-show="wpaSecResults.length === 0" style="text-align: center; padding: 20px; color: #666;">
+                        No cracked results yet — uploaded handshakes are checked against wpa-sec.stanev.org periodically
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="system-actions">
+            <button class="btn" @click="confirmReboot">Reboot</button>
+            <button class="btn btn-danger" @click="confirmShutdown">Shutdown</button>
+        </div>
+
         <footer>
             Pwnagotchi Zero v1.0.0 | <a href="https://github.com/pwnagotchi-zero" style="color: #4ade80;">GitHub</a>
         </footer>
@@ -230,14 +268,40 @@
                 attackRoguem2: true,
                 attackSaving: false,
 
+                wpaSecResults: [],
+                showPasswords: false,
+
                 async init() {
                     await this.refresh();
                     await this.loadHandshakes();
                     await this.loadFramebuffer();
                     await this.loadAttackSettings();
+                    await this.loadWpaSecResults();
                     setInterval(() => this.refresh(), 5000);
                     setInterval(() => this.loadFramebuffer(), 2000);
+                    setInterval(() => this.loadWpaSecResults(), 30000);
                     this.connectWS();
+                },
+
+                async loadWpaSecResults() {
+                    try {
+                        const resp = await fetch('/api/wpa-sec/results');
+                        this.wpaSecResults = await resp.json();
+                    } catch (e) {
+                        console.error('WPA-SEC results fetch failed:', e);
+                    }
+                },
+
+                confirmReboot() {
+                    if (confirm('Reboot the device now?')) {
+                        fetch('/api/reboot', { method: 'POST' });
+                    }
+                },
+
+                confirmShutdown() {
+                    if (confirm('Shut down the device now? You will need physical access to power it back on.')) {
+                        fetch('/api/shutdown', { method: 'POST' });
+                    }
                 },
 
                 async loadAttackSettings() {
