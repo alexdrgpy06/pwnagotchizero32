@@ -43,10 +43,11 @@ xzcat pwnagotchi-zero-32bit-v1.0.0.img.xz | sudo dd of=/dev/sdX bs=4M status=pro
 1. Insert SD card, attach display + PiSugar
 2. Power on — boot face appears in ~15s
 3. Connect via SSH: `ssh pi@pwnagotchi.local` (default password: `raspberry`)
-4. Configure: `sudo nano /etc/pwnagotchi/config.toml`
-5. Pair phone: `bluetoothctl` → `scan on` → `pair <MAC>` → `trust <MAC>`
-6. Enable BT tether in config: `bt_tether_enabled = true`
-7. Reboot: `sudo reboot`
+4. **Set the WiFi regulatory country** — required, and not something the image can bake in (it's a legal/regional setting, not a hardware default): `sudo raspi-config nonint do_wifi_country XX` (2-letter code, e.g. `US`). Without this, `rfkill list` shows WiFi as `Soft blocked: yes` and monitor mode never comes up, no matter what's in `config.toml`.
+5. Configure: `sudo nano /etc/pwnagotchi/config.toml`
+6. Pair phone: `bluetoothctl` → `scan on` → `pair <MAC>` → `trust <MAC>`
+7. Enable BT tether in config: `bt_tether_enabled = true`
+8. Reboot: `sudo reboot`
 
 ### Web Dashboard
 
