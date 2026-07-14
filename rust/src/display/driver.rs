@@ -28,8 +28,10 @@ mod cmd {
 mod update_mode {
     /// Load temperature + LUT and run a full refresh (screen flashes clean).
     pub const FULL: u8 = 0xF7;
-    /// Reuse the loaded LUT for a partial refresh (no flashing).
-    pub const PARTIAL: u8 = 0x0C;
+    /// Matches Waveshare's own TurnOnDisplayPart() exactly (epd2in13_V4.py)
+    /// — 0x0C is a different LUT entirely and never actually applied a
+    /// partial-refresh frame to the panel on this hardware.
+    pub const PARTIAL: u8 = 0xFF;
 }
 
 /// E-ink display driver (SSD1680 over SPI + GPIO)
@@ -356,22 +358,53 @@ impl EpdDriver {
     }
 
     /// Partial refresh: updates only changed pixels without flashing.
+    ///
+    /// Matches Waveshare's own epd2in13_V4.py displayPartial() exactly —
+    /// this used to just write WRITE_RAM and trigger with sequence byte
+    /// 0x0C, which is not what the reference driver does at all for
+    /// partial mode, and never actually applied a frame to the panel on
+    /// real hardware (confirmed: the daemon's own epoch counter advanced
+    /// normally underneath while the panel stayed frozen on whatever the
+    /// last full refresh drew). The real sequence needs a quick reset
+    /// pulse and re-sends BorderWaveform/DriverOutputControl/DataEntryMode/
+    /// window before every partial write, and never touches WRITE_RAM_RED
+    /// at all — that's only for displayPartBaseImage's one-time baseline
+    /// seed, i.e. our full_update().
     #[cfg(target_os = "linux")]
     pub fn partial_update(&mut self, buffer: &FrameBuffer) -> Result<()> {
+        use std::{thread, time::Duration};
+
         let ram = buffer.to_panel_ram();
 
+        Self::gpio_write(self.rst_pin, 0)?;
+        thread::sleep(Duration::from_millis(1));
+        Self::gpio_write(self.rst_pin, 1)?;
+
+        self.send_command(cmd::BORDER_WAVEFORM)?;
+        self.send_data_byte(0x80)?;
+
+        self.send_command(cmd::DRIVER_OUTPUT_CONTROL)?;
+        self.send_data_byte(0xF9)?;
+        self.send_data_byte(0x00)?;
+        self.send_data_byte(0x00)?;
+
+        self.send_command(cmd::DATA_ENTRY_MODE)?;
+        self.send_data_byte(0x03)?;
+
+        self.send_command(cmd::SET_RAM_X_ADDRESS)?;
+        self.send_data_byte(0x00)?;
+        self.send_data_byte(0x0F)?;
+        self.send_command(cmd::SET_RAM_Y_ADDRESS)?;
+        self.send_data_byte(0x00)?;
+        self.send_data_byte(0x00)?;
+        self.send_data_byte(0xF9)?;
+        self.send_data_byte(0x00)?;
         self.set_cursor()?;
+
         self.send_command(cmd::WRITE_RAM)?;
         self.send_data(&ram)?;
 
-        self.refresh(update_mode::PARTIAL)?;
-
-        // Promote the new frame into the reference bank so the following
-        // partial refresh diffs against what is actually on screen.
-        self.set_cursor()?;
-        self.send_command(cmd::WRITE_RAM_RED)?;
-        self.send_data(&ram)?;
-        Ok(())
+        self.refresh(update_mode::PARTIAL)
     }
 
     #[cfg(not(target_os = "linux"))]
