@@ -161,7 +161,12 @@ fn default_lang() -> String {
     "en".to_string()
 }
 fn default_iface() -> String {
-    "wlan0mon".to_string()
+    // The physical interface, before monitor mode. WifiManager derives the
+    // monitor interface by appending "mon" (see wifi::WifiManager::new) —
+    // this must NOT already be "wlan0mon", or the very first "bring the
+    // interface down" command targets a device that doesn't exist yet and
+    // start_monitor_mode() fails immediately, every epoch, forever.
+    "wlan0".to_string()
 }
 fn default_mon_start_cmd() -> String {
     "/usr/bin/monstart".to_string()
@@ -843,7 +848,7 @@ mod tests {
     async fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.main.name, "pwnagotchi-zero");
-        assert_eq!(config.main.iface, "wlan0mon");
+        assert_eq!(config.main.iface, "wlan0");
         assert!(config.oxigotchi.bt_tether_enabled);
     }
 }

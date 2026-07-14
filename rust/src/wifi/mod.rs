@@ -62,6 +62,20 @@ impl WifiManager {
         self.run_cmd("iw", &["dev", &self.interface, "set", "type", "monitor"])
             .await?;
 
+        // `iw ... set type monitor` changes the wireless type but does NOT
+        // rename the interface — it stays named e.g. "wlan0" until renamed
+        // explicitly. Without this, the next command ("bring wlan0mon up")
+        // fails every time with "Cannot find device", since no interface by
+        // that name exists yet. Tolerant of failure like monstart's
+        // equivalent line: some drivers already present it under the target
+        // name.
+        self.run_cmd(
+            "ip",
+            &["link", "set", &self.interface, "name", &self.monitor_interface],
+        )
+        .await
+        .ok();
+
         // Bring up
         self.run_cmd("ip", &["link", "set", &self.monitor_interface, "up"])
             .await?;
@@ -79,6 +93,16 @@ impl WifiManager {
         self.run_cmd(
             "iw",
             &["dev", &self.monitor_interface, "set", "type", "managed"],
+        )
+        .await
+        .ok();
+        // Rename back to the base interface name before bringing it up —
+        // mirrors monstop. Without this, the interface stays named
+        // "wlan0mon" and the next start_monitor_mode() call's "bring wlan0
+        // down" step fails, since nothing is named "wlan0" anymore.
+        self.run_cmd(
+            "ip",
+            &["link", "set", &self.monitor_interface, "name", &self.interface],
         )
         .await
         .ok();
