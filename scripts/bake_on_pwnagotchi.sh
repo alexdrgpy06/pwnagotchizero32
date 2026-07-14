@@ -107,6 +107,20 @@ if [ -f "${BOOT_MNT}/cmdline.txt" ]; then
     fi
 fi
 
+# Confirmed on real hardware via /sys/kernel/debug/gpio: config.txt's
+# dtoverlay=spi1-3cs claims GPIO16/17/18 as SPI1 chip-select lines at the
+# pinctrl level — a permanent kernel-level claim, not a transient one. GPIO17
+# is the e-ink panel's RST line, so the display driver's GPIO export
+# (/sys/class/gpio/export) failed with "Device or resource busy" every time,
+# regardless of retries — this isn't a race, the pin is just unavailable
+# while spi1-3cs is loaded. Nothing in this project uses SPI1 (only SPI0, for
+# the display), so disable it. This is the one exception to "don't touch
+# config.txt" beyond the cmdline.txt USB gadget fix above — same reasoning:
+# the base image's own settings actively conflict with our hardware wiring.
+if [ -f "${BOOT_MNT}/config.txt" ]; then
+    sed -i 's/^dtoverlay=spi1-3cs/#dtoverlay=spi1-3cs/' "${BOOT_MNT}/config.txt"
+fi
+
 echo "== Installing zram wear-leveling (log + data mounts) =="
 install -m 755 "${OVERLAY_DIR}/usr/local/bin/zram-setup.sh" "${ROOT_MNT}/usr/local/bin/zram-setup.sh"
 install -m 755 "${OVERLAY_DIR}/usr/local/bin/zram-teardown.sh" "${ROOT_MNT}/usr/local/bin/zram-teardown.sh"
