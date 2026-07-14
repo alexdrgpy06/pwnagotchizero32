@@ -80,6 +80,18 @@ if [ -e /sys/class/net/usb0 ]; then
     ip addr add 10.0.0.2/24 dev usb0 || true
     ip addr add 192.168.137.2/24 dev usb0 || true
 
+    # Best-effort default route via the ICS gateway, at a deliberately high
+    # (low-priority) metric so it only kicks in when nothing better already
+    # provides a default route (BT tether, a wlan0 client connection, etc.)
+    # — `add`, never `replace`, so this can't hijack routing away from a
+    # working connection. Confirmed on real hardware: with ICS active on the
+    # host, this is the difference between NTP never syncing at all (no
+    # route out of usb0 whatsoever, clock stuck on whatever fake-hwclock
+    # last saved — every log timestamp reading "2023" instead of the real
+    # date) and it syncing within seconds. Silent no-op when ICS isn't
+    # enabled — 192.168.137.1 just won't answer ARP and the route sits unused.
+    ip route add default via 192.168.137.1 dev usb0 metric 400 2>/dev/null || true
+
     # Hand the connected host an address on our subnet so `ssh pi@10.0.0.2`
     # works with no manual IP setup, when ICS hasn't already claimed the link.
     if command -v dnsmasq >/dev/null 2>&1; then
