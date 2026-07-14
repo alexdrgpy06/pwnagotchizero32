@@ -40,14 +40,16 @@ xzcat pwnagotchi-zero-32bit-v1.0.0.img.xz | sudo dd of=/dev/sdX bs=4M status=pro
 
 ### First Boot
 
-1. Insert SD card, attach display + PiSugar
-2. Power on — boot face appears in ~15s
-3. Connect via SSH: `ssh pi@pwnagotchi.local` (default password: `raspberry`)
-4. **Set the WiFi regulatory country** — required, and not something the image can bake in (it's a legal/regional setting, not a hardware default): `sudo raspi-config nonint do_wifi_country XX` (2-letter code, e.g. `US`). Without this, `rfkill list` shows WiFi as `Soft blocked: yes` and monitor mode never comes up, no matter what's in `config.toml`.
+1. (Optional) Before flashing, drop a `country.txt` file containing your 2-letter WiFi regulatory code (e.g. `US`) onto the boot partition — defaults to `US` if you skip this
+2. Insert SD card, attach display + PiSugar
+3. Power on — boot face appears in ~15s. WiFi rfkill/country is configured automatically on first boot (`wifi-country.service`, runs once)
+4. Connect via SSH: `ssh pi@pwnagotchi.local` (default password: `raspberry`)
 5. Configure: `sudo nano /etc/pwnagotchi/config.toml`
 6. Pair phone: `bluetoothctl` → `scan on` → `pair <MAC>` → `trust <MAC>`
 7. Enable BT tether in config: `bt_tether_enabled = true`
 8. Reboot: `sudo reboot`
+
+To change the country after first boot, `sudo raspi-config nonint do_wifi_country XX` still works as normal — `wifi-country.service` only runs once and won't overwrite a country you set deliberately.
 
 ### Web Dashboard
 

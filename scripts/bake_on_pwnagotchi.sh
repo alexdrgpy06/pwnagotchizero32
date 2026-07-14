@@ -87,6 +87,20 @@ fi
 install -m 755 "${OVERLAY_DIR}/usr/bin/monstart" "${ROOT_MNT}/usr/bin/monstart" 2>/dev/null || true
 install -m 755 "${OVERLAY_DIR}/usr/bin/monstop" "${ROOT_MNT}/usr/bin/monstop" 2>/dev/null || true
 
+echo "== Installing first-boot WiFi country/rfkill setup =="
+# jayofelony's own images ship with WiFi working out of the box (their wiki:
+# settings "have already been correctly set in the image file") — this
+# project just never carried that over, leaving WiFi rfkill-blocked until a
+# manual `raspi-config nonint do_wifi_country` on every fresh flash. Can't
+# fix this by running rfkill/iw at *bake* time — there's no real WiFi
+# hardware in a CI chroot to unblock — so this runs once on the real
+# device's first real boot instead. Defaults to US, overridable by dropping
+# a 2-letter country code in country.txt on the boot partition before
+# flashing (same convention stock Raspberry Pi OS uses for pre-seeding
+# wpa_supplicant.conf).
+install -m 755 "${OVERLAY_DIR}/usr/local/bin/wifi-country.sh" "${ROOT_MNT}/usr/local/bin/wifi-country.sh"
+install -m 644 "${OVERLAY_DIR}/etc/systemd/system/wifi-country.service" "${ROOT_MNT}/etc/systemd/system/wifi-country.service"
+
 echo "== Installing our RNDIS USB gadget (base image's g_ether gets mis-bound as a serial COM port on Windows) =="
 install -m 755 "${OVERLAY_DIR}/usr/local/bin/usb-gadget.sh" "${ROOT_MNT}/usr/local/bin/usb-gadget.sh"
 install -m 644 "${OVERLAY_DIR}/etc/systemd/system/usb-gadget.service" "${ROOT_MNT}/etc/systemd/system/usb-gadget.service"
@@ -221,6 +235,7 @@ done
 chroot "${ROOT_MNT}" /usr/bin/qemu-arm-static /bin/bash -c '
 set +e
 systemctl enable oxigotchi.service
+systemctl enable wifi-country.service
 systemctl enable usb-gadget.service
 systemctl enable zram-log.service
 systemctl enable zram-data.service
