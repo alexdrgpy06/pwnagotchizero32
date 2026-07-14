@@ -55,12 +55,15 @@ async fn main() -> Result<()> {
         sig.notify_waiters();
     });
 
-    // --- Display (boot face) -----------------------------------------------
-    let mut display = Display::new(&config)?;
-    if let Err(e) = display.init() {
-        tracing::warn!("display init (headless): {e}");
-    }
-    let _ = display.update(true);
+    // --- Display -------------------------------------------------------------
+    // Construct only. Initializing here AND in EpochLoop::run() (which used
+    // to happen) fired two full hardware resets and two full refreshes back
+    // to back — the second one interrupting the SSD1680 mid-waveform from
+    // the first, since a full refresh physically takes 1-2+ seconds and our
+    // BUSY-wait doesn't reliably detect completion. That left the controller
+    // wedged: BUSY stuck asserted, and every refresh after boot silently not
+    // applying to the panel. EpochLoop::run() is the single init call now.
+    let display = Display::new(&config)?;
 
     // --- Subsystems --------------------------------------------------------
     let wifi = wifi::WifiManager::new(&config).await?;
@@ -79,8 +82,9 @@ async fn main() -> Result<()> {
     if config.ui.web.enabled {
         let wc = config.clone();
         let status = web.status_handle();
+        let framebuffer = web.framebuffer_handle();
         tokio::spawn(async move {
-            if let Err(e) = web::WebServer::serve(wc, status).await {
+            if let Err(e) = web::WebServer::serve(wc, status, framebuffer).await {
                 tracing::error!("web: {e}");
             }
         });

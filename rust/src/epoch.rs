@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::web::{read_system_metrics, SharedStatus};
+use crate::web::{read_system_metrics, SharedFramebuffer, SharedStatus};
 
 use crate::attacks::AttackEngine;
 use crate::bluetooth::BluetoothManager;
@@ -31,6 +31,7 @@ pub struct EpochLoop {
     plugins: PluginManager,
     web: WebServer,
     status: SharedStatus,
+    framebuffer: SharedFramebuffer,
     start: Instant,
     epoch: u64,
     running: bool,
@@ -52,6 +53,7 @@ impl EpochLoop {
         web: WebServer,
     ) -> Result<Self> {
         let status = web.status_handle();
+        let framebuffer = web.framebuffer_handle();
         Ok(Self {
             config,
             display,
@@ -65,6 +67,7 @@ impl EpochLoop {
             plugins,
             web,
             status,
+            framebuffer,
             start: Instant::now(),
             epoch: 0,
             running: true,
@@ -202,11 +205,27 @@ impl EpochLoop {
         // Partial refresh most epochs; force a full (de-ghosting) refresh on
         // the first epoch and every `display_full_refresh_interval` after, or
         // always-full when partial refresh is disabled in config.
+        //
+        // self.epoch is incremented to 1 before this runs, so "first epoch"
+        // is epoch == 1, not epoch == 0 — `epoch % interval == 0` alone never
+        // matches on the very first call (1 % 10 == 1), so the real content
+        // (mood + status line) never appeared until 10 epochs (~5 minutes)
+        // of uninterrupted running had passed; every partial refresh before
+        // that redraws a whole new face + status line through a LUT meant
+        // for small incremental changes, which doesn't reliably apply
+        // visually on this hardware. The panel was stuck showing whatever
+        // the last full refresh drew — the boot face from Display::init().
         let cfg = &self.config.oxigotchi;
         let interval = cfg.display_full_refresh_interval;
-        let due_full = interval != 0 && self.epoch % interval == 0;
+        let due_full = self.epoch == 1 || (interval != 0 && self.epoch % interval == 0);
         let partial = cfg.display_partial_refresh && !due_full;
         self.display.update(partial)?;
+
+        // Publish for the web dashboard's live e-ink mirror — same bytes
+        // just sent to the panel, so the browser shows exactly what's there.
+        if let Ok(mut fb) = self.framebuffer.write() {
+            fb.copy_from_slice(self.display.framebuffer_bytes());
+        }
 
         Ok(())
     }
