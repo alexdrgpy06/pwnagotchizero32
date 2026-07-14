@@ -103,6 +103,7 @@ impl WebServer {
                 get(api_handshake_download),
             )
             .route("/api/wpa-sec/results", get(api_wpa_sec_results))
+            .route("/api/logs", get(api_logs))
             .route("/api/shutdown", post(api_shutdown))
             .route("/api/reboot", post(api_reboot))
             .route("/ws", get(ws_upgrade))
@@ -261,6 +262,32 @@ async fn api_wpa_sec_results() -> Json<Vec<serde_json::Value>> {
 
     out.reverse(); // newest cracked result last in the file, show first
     Json(out)
+}
+
+/// Tail the daemon's own journal — the Rust binary logs to stdout/journald
+/// only (tracing_subscriber::fmt(), no file appender configured), so this
+/// shells out to journalctl rather than tailing a log file that doesn't
+/// exist. Runs as root (same as the daemon itself), so journalctl access is
+/// unrestricted.
+async fn api_logs() -> impl IntoResponse {
+    let output = tokio::process::Command::new("journalctl")
+        .args(["-u", "oxigotchi", "-n", "200", "--no-pager", "-o", "short"])
+        .output()
+        .await;
+
+    match output {
+        Ok(out) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            out.stdout,
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("journalctl failed: {e}"),
+        )
+            .into_response(),
+    }
 }
 
 async fn api_shutdown() -> impl IntoResponse {

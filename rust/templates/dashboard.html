@@ -55,6 +55,7 @@
         .wpa-essid { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .wpa-meta { font-size: 0.8rem; color: #888; }
         .wpa-password { font-family: monospace; background: #0f3460; padding: 4px 10px; border-radius: 4px; color: #4ade80; white-space: nowrap; }
+        .log-view { background: #0a0a18; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.72rem; line-height: 1.4; max-height: 350px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: #9ca3af; }
         footer { margin-top: 30px; text-align: center; color: #555; font-size: 0.8rem; }
         @media (max-width: 600px) {
             .container { padding: 15px; }
@@ -72,7 +73,7 @@
             <div style="display: flex; gap: 20px; align-items: center;">
                 <span>
                     <span class="status-indicator" :class="btConnected ? 'online' : 'offline'"></span>
-                    <span x-text="btConnected ? 'BT Connected' : 'BT Disconnected'"></span>
+                    <span x-text="btConnected ? ('BT: ' + (btDevice || 'connected')) : 'BT Disconnected'"></span>
                 </span>
                 <span x-text="battery + '%'"></span>
             </div>
@@ -123,6 +124,30 @@
                 <div class="stat">
                     <span class="stat-label">Blind Epochs</span>
                     <span class="stat-value" :class="blindEpochs > 3 ? 'warn' : 'good'" x-text="blindEpochs"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Recovery</span>
+                    <span class="stat-value" :class="wifiRecovering ? 'warn' : 'good'" x-text="wifiRecovering ? ('recovering (' + wifiErrorCount + ' errors)') : 'ok'"></span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Captures</h2>
+                <div class="stat">
+                    <span class="stat-label">Total</span>
+                    <span class="stat-value" x-text="capturesTotal"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Uploaded</span>
+                    <span class="stat-value good" x-text="capturesUploaded"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Pending Upload</span>
+                    <span class="stat-value" :class="capturesPending > 0 ? 'warn' : 'good'" x-text="capturesPending"></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Disk Usage</span>
+                    <span class="stat-value" x-text="capturesDiskMb + ' MB'"></span>
                 </div>
             </div>
 
@@ -228,6 +253,17 @@
             </div>
         </div>
 
+        <div class="grid" style="margin-top: 20px;">
+            <div class="card" style="grid-column: 1 / -1;">
+                <h2>
+                    Log
+                    <button class="btn" @click="autoScrollLog = !autoScrollLog" style="float: right; font-size: 0.7rem; margin-left: 8px;" x-text="autoScrollLog ? 'Pause' : 'Resume'"></button>
+                    <button class="btn" @click="loadLogs" style="float: right; font-size: 0.7rem;">Refresh</button>
+                </h2>
+                <div class="log-view" x-ref="logView" x-text="logText"></div>
+            </div>
+        </div>
+
         <div class="system-actions">
             <button class="btn" @click="confirmReboot">Reboot</button>
             <button class="btn btn-danger" @click="confirmShutdown">Shutdown</button>
@@ -257,7 +293,17 @@
                 ramUsed: 0,
                 ramTotal: 512,
                 btConnected: false,
+                btDevice: null,
+                wifiRecovering: false,
+                wifiErrorCount: 0,
+                capturesTotal: 0,
+                capturesUploaded: 0,
+                capturesPending: 0,
+                capturesDiskMb: 0,
                 handshakeList: [],
+
+                logText: '',
+                autoScrollLog: true,
 
                 attackRate: 1,
                 attackDeauth: true,
@@ -277,9 +323,11 @@
                     await this.loadFramebuffer();
                     await this.loadAttackSettings();
                     await this.loadWpaSecResults();
+                    await this.loadLogs();
                     setInterval(() => this.refresh(), 5000);
                     setInterval(() => this.loadFramebuffer(), 2000);
                     setInterval(() => this.loadWpaSecResults(), 30000);
+                    setInterval(() => this.loadLogs(), 5000);
                     this.connectWS();
                 },
 
@@ -289,6 +337,20 @@
                         this.wpaSecResults = await resp.json();
                     } catch (e) {
                         console.error('WPA-SEC results fetch failed:', e);
+                    }
+                },
+
+                async loadLogs() {
+                    if (!this.autoScrollLog) return;
+                    try {
+                        const resp = await fetch('/api/logs');
+                        this.logText = await resp.text();
+                        this.$nextTick(() => {
+                            const el = this.$refs.logView;
+                            if (el) el.scrollTop = el.scrollHeight;
+                        });
+                    } catch (e) {
+                        console.error('Log fetch failed:', e);
                     }
                 },
 
@@ -390,6 +452,13 @@
                     this.ramUsed = data.ram_used;
                     this.ramTotal = data.ram_total;
                     this.btConnected = data.bluetooth;
+                    this.btDevice = data.bt_device;
+                    this.wifiRecovering = data.wifi_recovering;
+                    this.wifiErrorCount = data.wifi_error_count;
+                    this.capturesTotal = data.captures_total;
+                    this.capturesUploaded = data.captures_uploaded;
+                    this.capturesPending = data.captures_pending;
+                    this.capturesDiskMb = data.captures_disk_mb;
                     this.uptime = this.formatUptime(data.uptime);
                 },
 

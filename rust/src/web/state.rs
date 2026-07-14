@@ -45,6 +45,14 @@ pub struct StatusSnapshot {
     pub ram_used: u64,
     pub ram_total: u64,
     pub uptime: u64,
+    // Already computed by RecoveryManager/CaptureManager but never surfaced
+    // to the dashboard before — the data existed, nothing read it.
+    pub wifi_recovering: bool,
+    pub wifi_error_count: u32,
+    pub captures_total: usize,
+    pub captures_uploaded: usize,
+    pub captures_pending: usize,
+    pub captures_disk_mb: u64,
 }
 
 impl StatusSnapshot {
@@ -68,6 +76,12 @@ impl StatusSnapshot {
             ram_used: 0,
             ram_total: 0,
             uptime: 0,
+            wifi_recovering: false,
+            wifi_error_count: 0,
+            captures_total: 0,
+            captures_uploaded: 0,
+            captures_pending: 0,
+            captures_disk_mb: 0,
         }
     }
 }

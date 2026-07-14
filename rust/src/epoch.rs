@@ -144,7 +144,7 @@ impl EpochLoop {
         self.maintenance().await?;
 
         // Publish live snapshot for the web dashboard
-        self.publish_status();
+        self.publish_status().await;
 
         // Notify plugins
         let status = self.build_status();
@@ -155,9 +155,12 @@ impl EpochLoop {
 
     /// Push the current runtime state into the shared snapshot the web
     /// dashboard reads from.
-    fn publish_status(&self) {
+    async fn publish_status(&self) {
         let stats = self.personality.get_stats();
         let (cpu_temp, ram_used, ram_total) = read_system_metrics();
+        // RecoveryManager/CaptureManager already track this; it just never
+        // reached the dashboard before.
+        let captures = self.captures.get_stats().await;
 
         if let Ok(mut snap) = self.status.write() {
             snap.epoch = self.epoch;
@@ -177,6 +180,12 @@ impl EpochLoop {
             snap.ram_used = ram_used;
             snap.ram_total = ram_total;
             snap.uptime = self.start.elapsed().as_secs();
+            snap.wifi_recovering = self.recovery.is_recovering();
+            snap.wifi_error_count = self.recovery.error_count();
+            snap.captures_total = captures.total_captures;
+            snap.captures_uploaded = captures.uploaded;
+            snap.captures_pending = captures.pending;
+            snap.captures_disk_mb = captures.disk_usage / (1024 * 1024);
         }
     }
 
