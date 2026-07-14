@@ -185,26 +185,32 @@ impl EpochLoop {
         // this the previous face and status text would remain underneath.
         self.display.clear()?;
 
-        // Classic pwnagotchi layout — header (channel/APs/blind epochs,
-        // uptime), name + mood phrase, big face, footer (handshakes/level,
-        // mode) — replacing the bare face + one raw debug line this used to
-        // draw, which showed none of the information an actual pwnagotchi
-        // display shows.
+        // The exact pwnagotchi layout — coordinates from jayofelony's own
+        // waveshare2in13_V4.py hw driver for this exact panel, real Unicode
+        // kaomoji face (TTF-rendered, matching pwnagotchi's own PIL-based
+        // UI) instead of an ASCII approximation. Replaces the bare face +
+        // one raw debug line this used to draw
+        // ("Epoch:1 HS:0 BT:off Bat:100%"), which showed none of the
+        // information an actual pwnagotchi display shows.
         let stats = self.personality.get_stats();
-        let mood_str = format!("{:?}", stats.mood).to_lowercase();
+        let face = self.personality.get_face(stats.mood);
         let secs = self.start.elapsed().as_secs();
         let uptime = format!("{:02}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60);
+        let (cpu_temp, ram_used, ram_total) = read_system_metrics();
         self.display.draw_pwnagotchi_frame(
             self.wifi.current_channel(),
             self.wifi.get_aps().len(),
-            self.personality.blind_epochs(),
+            self.bluetooth.is_connected(),
             &uptime,
             &self.config.main.name,
             self.personality.get_phrase(),
-            &mood_str,
+            &face,
             stats.handshakes,
             stats.level,
             "AUTO",
+            cpu_temp,
+            ram_used,
+            ram_total,
         )?;
 
         // Partial refresh most epochs; force a full (de-ghosting) refresh on

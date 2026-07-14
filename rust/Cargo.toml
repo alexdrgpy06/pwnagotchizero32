@@ -27,6 +27,13 @@ toml = "0.8"
 
 # Graphics
 embedded-graphics = "0.8"
+# Real pwnagotchi renders faces/text with PIL + DejaVuSansMono (a TTF, full
+# Unicode) — embedded-graphics's bundled fonts are ASCII-only bitmap fonts,
+# so kaomoji like "(•‿‿•)" (● and ‿ aren't ASCII) render as blank boxes.
+# ab_glyph rasterizes the same TTF pwnagotchi already depends on (already on
+# the base image — fonts-dejavu-core), matching the real device exactly
+# instead of an ASCII approximation.
+ab_glyph = "0.2"
 
 # Bluetooth — D-Bus removed until native zbus connection is implemented
 # zbus = { version = "4.0", default-features = false, features = ["blocking"] }
