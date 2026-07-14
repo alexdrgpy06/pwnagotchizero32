@@ -169,6 +169,13 @@ impl Display {
         Ok(())
     }
 
+    /// The current framebuffer's raw packed 1bpp bytes, for mirroring on the
+    /// web dashboard — exactly what was last sent (or is about to be sent) to
+    /// the physical panel.
+    pub fn framebuffer_bytes(&self) -> &[u8] {
+        self.buffer.as_bytes()
+    }
+
     pub fn sleep(&mut self) -> Result<()> {
         self.driver.sleep()
     }

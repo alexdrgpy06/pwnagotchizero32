@@ -36,6 +36,7 @@
         .status-indicator.online { background: #4ade80; }
         .status-indicator.offline { background: #f87171; }
         .status-indicator.warning { background: #fbbf24; }
+        .epd-mirror { image-rendering: pixelated; image-rendering: crisp-edges; background: #fff; border: 1px solid #0f3460; border-radius: 4px; width: 250px; height: 122px; }
         footer { margin-top: 30px; text-align: center; color: #555; font-size: 0.8rem; }
         @media (max-width: 600px) {
             .container { padding: 15px; }
@@ -58,6 +59,13 @@
                 <span x-text="battery + '%'"></span>
             </div>
         </header>
+
+        <div class="grid" style="margin-bottom: 20px;">
+            <div class="card" style="grid-column: 1 / -1; text-align: center;">
+                <h2>E-Ink Display (Live)</h2>
+                <canvas class="epd-mirror" x-ref="epdCanvas" width="250" height="122"></canvas>
+            </div>
+        </div>
 
         <div class="grid">
             <div class="card">
@@ -170,8 +178,41 @@
                 async init() {
                     await this.refresh();
                     await this.loadHandshakes();
+                    await this.loadFramebuffer();
                     setInterval(() => this.refresh(), 5000);
+                    setInterval(() => this.loadFramebuffer(), 2000);
                     this.connectWS();
+                },
+
+                // Decode the raw 1-bit-per-pixel packed framebuffer (MSB
+                // first, 0 bit = black) straight into the canvas — same
+                // format display::buffer::FrameBuffer packs on the device,
+                // so this mirrors exactly what the physical panel shows.
+                async loadFramebuffer() {
+                    try {
+                        const resp = await fetch('/api/framebuffer');
+                        const bytes = new Uint8Array(await resp.arrayBuffer());
+                        const w = 250, h = 122, stride = Math.ceil(w / 8);
+                        const canvas = this.$refs.epdCanvas;
+                        if (!canvas) return;
+                        const ctx = canvas.getContext('2d');
+                        const img = ctx.createImageData(w, h);
+                        for (let y = 0; y < h; y++) {
+                            for (let x = 0; x < w; x++) {
+                                const byteIdx = y * stride + (x >> 3);
+                                const bit = (bytes[byteIdx] >> (7 - (x & 7))) & 1;
+                                const val = bit ? 255 : 0;
+                                const i = (y * w + x) * 4;
+                                img.data[i] = val;
+                                img.data[i + 1] = val;
+                                img.data[i + 2] = val;
+                                img.data[i + 3] = 255;
+                            }
+                        }
+                        ctx.putImageData(img, 0, 0);
+                    } catch (e) {
+                        console.error('Framebuffer fetch failed:', e);
+                    }
                 },
 
                 applyStatus(data) {

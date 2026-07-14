@@ -13,6 +13,17 @@ use serde::Serialize;
 /// web server.
 pub type SharedStatus = Arc<RwLock<StatusSnapshot>>;
 
+/// Cheaply-cloneable handle to the raw 1-bit-per-pixel e-ink framebuffer,
+/// shared the same way as [`SharedStatus`] so the dashboard can mirror
+/// exactly what's on the physical panel.
+pub type SharedFramebuffer = Arc<RwLock<Vec<u8>>>;
+
+/// Build a fresh shared framebuffer handle, blank (all-white) until the first
+/// epoch publishes a real frame.
+pub fn new_shared_framebuffer(byte_len: usize) -> SharedFramebuffer {
+    Arc::new(RwLock::new(vec![0xFFu8; byte_len]))
+}
+
 /// Full point-in-time view of the daemon, serialized verbatim to the dashboard.
 #[derive(Debug, Clone, Serialize)]
 pub struct StatusSnapshot {

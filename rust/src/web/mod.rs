@@ -6,7 +6,10 @@
 
 mod state;
 
-pub use state::{new_shared, read_system_metrics, SharedStatus, StatusSnapshot};
+pub use state::{
+    new_shared, new_shared_framebuffer, read_system_metrics, SharedFramebuffer, SharedStatus,
+    StatusSnapshot,
+};
 
 use anyhow::Result;
 use axum::{
@@ -24,25 +27,34 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::config::Config;
+use crate::display::{DISPLAY_HEIGHT, DISPLAY_WIDTH};
 
 /// Shared router state: config for paths/credentials + the live snapshot.
 #[derive(Clone)]
 struct AppState {
     config: Arc<Config>,
     status: SharedStatus,
+    framebuffer: SharedFramebuffer,
 }
 
 pub struct WebServer {
     #[allow(dead_code)]
     config: Arc<Config>,
     status: SharedStatus,
+    framebuffer: SharedFramebuffer,
 }
+
+/// Bytes-per-row of the packed 1bpp framebuffer, matching
+/// `display::buffer::FrameBuffer`'s own layout exactly.
+const FRAMEBUFFER_STRIDE: usize = (DISPLAY_WIDTH as usize + 7) / 8;
+const FRAMEBUFFER_LEN: usize = FRAMEBUFFER_STRIDE * DISPLAY_HEIGHT as usize;
 
 impl WebServer {
     pub async fn new(config: &Arc<Config>) -> Result<Self> {
         Ok(Self {
             config: config.clone(),
             status: new_shared(config.main.name.clone()),
+            framebuffer: new_shared_framebuffer(FRAMEBUFFER_LEN),
         })
     }
 
@@ -51,16 +63,28 @@ impl WebServer {
         self.status.clone()
     }
 
+    /// Handle the epoch loop can use to publish the live e-ink framebuffer,
+    /// so the dashboard can mirror exactly what's on the physical panel.
+    pub fn framebuffer_handle(&self) -> SharedFramebuffer {
+        self.framebuffer.clone()
+    }
+
     /// Run the HTTP/WebSocket server. Spawn this on its own task.
-    pub async fn serve(config: Arc<Config>, status: SharedStatus) -> Result<()> {
+    pub async fn serve(
+        config: Arc<Config>,
+        status: SharedStatus,
+        framebuffer: SharedFramebuffer,
+    ) -> Result<()> {
         let state = AppState {
             config: config.clone(),
             status,
+            framebuffer,
         };
 
         let router = Router::new()
             .route("/", get(dashboard))
             .route("/api/status", get(api_status))
+            .route("/api/framebuffer", get(api_framebuffer))
             .route("/api/handshakes", get(api_handshakes))
             .route(
                 "/api/handshakes/download/{file}",
@@ -86,6 +110,24 @@ async fn dashboard() -> impl IntoResponse {
 async fn api_status(State(state): State<AppState>) -> Json<StatusSnapshot> {
     let snap = state.status.read().expect("status lock poisoned").clone();
     Json(snap)
+}
+
+/// Raw packed 1bpp framebuffer (MSB-first, 0 bit = black), the exact same
+/// bytes the SSD1680 driver was last given — the dashboard mirrors this on a
+/// canvas instead of guessing what the physical panel shows.
+async fn api_framebuffer(State(state): State<AppState>) -> impl IntoResponse {
+    let bytes = state
+        .framebuffer
+        .read()
+        .expect("framebuffer lock poisoned")
+        .clone();
+    (
+        [
+            (header::CONTENT_TYPE, "application/octet-stream"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        bytes,
+    )
 }
 
 /// List handshake capture files currently on disk.
