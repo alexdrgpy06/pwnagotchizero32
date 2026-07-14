@@ -83,8 +83,13 @@ async fn main() -> Result<()> {
         let wc = config.clone();
         let status = web.status_handle();
         let framebuffer = web.framebuffer_handle();
+        let attack_settings = attacks.settings_handle();
+        let attack_restart = attacks.restart_flag();
         tokio::spawn(async move {
-            if let Err(e) = web::WebServer::serve(wc, status, framebuffer).await {
+            if let Err(e) =
+                web::WebServer::serve(wc, status, framebuffer, attack_settings, attack_restart)
+                    .await
+            {
                 tracing::error!("web: {e}");
             }
         });

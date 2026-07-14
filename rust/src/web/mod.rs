@@ -23,9 +23,11 @@ use axum::{
     Router,
 };
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::attacks::{AttackSettings, SharedAttackSettings};
 use crate::config::Config;
 use crate::display::{DISPLAY_HEIGHT, DISPLAY_WIDTH};
 
@@ -35,6 +37,8 @@ struct AppState {
     config: Arc<Config>,
     status: SharedStatus,
     framebuffer: SharedFramebuffer,
+    attack_settings: SharedAttackSettings,
+    attack_restart: Arc<AtomicBool>,
 }
 
 pub struct WebServer {
@@ -74,17 +78,25 @@ impl WebServer {
         config: Arc<Config>,
         status: SharedStatus,
         framebuffer: SharedFramebuffer,
+        attack_settings: SharedAttackSettings,
+        attack_restart: Arc<AtomicBool>,
     ) -> Result<()> {
         let state = AppState {
             config: config.clone(),
             status,
             framebuffer,
+            attack_settings,
+            attack_restart,
         };
 
         let router = Router::new()
             .route("/", get(dashboard))
             .route("/api/status", get(api_status))
             .route("/api/framebuffer", get(api_framebuffer))
+            .route(
+                "/api/attacks",
+                get(api_attacks_get).post(api_attacks_post),
+            )
             .route("/api/handshakes", get(api_handshakes))
             .route(
                 "/api/handshakes/download/{file}",
@@ -128,6 +140,32 @@ async fn api_framebuffer(State(state): State<AppState>) -> impl IntoResponse {
         ],
         bytes,
     )
+}
+
+async fn api_attacks_get(State(state): State<AppState>) -> Json<AttackSettings> {
+    let settings = state
+        .attack_settings
+        .read()
+        .expect("attack settings lock poisoned")
+        .clone();
+    Json(settings)
+}
+
+/// Update attack toggles/rate and ask AttackEngine to restart AngryOxide with
+/// them on its next ensure_running() check (every epoch), instead of only
+/// taking effect after it happens to crash on its own.
+async fn api_attacks_post(
+    State(state): State<AppState>,
+    Json(new_settings): Json<AttackSettings>,
+) -> impl IntoResponse {
+    let mut settings = new_settings;
+    settings.rate = settings.rate.clamp(1, 3);
+    *state
+        .attack_settings
+        .write()
+        .expect("attack settings lock poisoned") = settings.clone();
+    state.attack_restart.store(true, Ordering::SeqCst);
+    Json(settings)
 }
 
 /// List handshake capture files currently on disk.

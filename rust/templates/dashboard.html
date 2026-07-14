@@ -37,6 +37,15 @@
         .status-indicator.offline { background: #f87171; }
         .status-indicator.warning { background: #fbbf24; }
         .epd-mirror { image-rendering: pixelated; image-rendering: crisp-edges; background: #fff; border: 1px solid #0f3460; border-radius: 4px; width: 250px; height: 122px; }
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
+        .toggle-row label { color: #ccc; cursor: pointer; }
+        .toggle-row input[type="checkbox"] { width: 36px; height: 20px; appearance: none; background: #0f3460; border-radius: 10px; position: relative; cursor: pointer; outline: none; }
+        .toggle-row input[type="checkbox"]::before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #888; top: 2px; left: 2px; transition: 0.15s; }
+        .toggle-row input[type="checkbox"]:checked { background: #16532e; }
+        .toggle-row input[type="checkbox"]:checked::before { background: #4ade80; transform: translateX(16px); }
+        .rate-slider { width: 100%; margin: 10px 0; accent-color: #4ade80; }
+        .rate-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: #888; }
+        .attacks-note { font-size: 0.75rem; color: #666; margin-top: 10px; }
         footer { margin-top: 30px; text-align: center; color: #555; font-size: 0.8rem; }
         @media (max-width: 600px) {
             .container { padding: 15px; }
@@ -131,6 +140,43 @@
 
         <div class="grid" style="margin-top: 20px;">
             <div class="card" style="grid-column: 1 / -1;">
+                <h2>Attacks</h2>
+                <div class="rate-labels">
+                    <span>Rate: <span x-text="['', 'Chill', 'Balanced', 'Aggressive'][attackRate]"></span></span>
+                    <span x-text="'saving...'" x-show="attackSaving" style="color: #4ade80;"></span>
+                </div>
+                <input type="range" class="rate-slider" min="1" max="3" step="1"
+                       x-model.number="attackRate" @change="saveAttackSettings">
+                <div class="toggle-row">
+                    <label for="atk-deauth">Deauth</label>
+                    <input id="atk-deauth" type="checkbox" x-model="attackDeauth" @change="saveAttackSettings">
+                </div>
+                <div class="toggle-row">
+                    <label for="atk-pmkid">PMKID</label>
+                    <input id="atk-pmkid" type="checkbox" x-model="attackPmkid" @change="saveAttackSettings">
+                </div>
+                <div class="toggle-row">
+                    <label for="atk-anon">Anonymous Reassoc</label>
+                    <input id="atk-anon" type="checkbox" x-model="attackAnon" @change="saveAttackSettings">
+                </div>
+                <div class="toggle-row">
+                    <label for="atk-csa">Channel Switch (CSA)</label>
+                    <input id="atk-csa" type="checkbox" x-model="attackCsa" @change="saveAttackSettings">
+                </div>
+                <div class="toggle-row">
+                    <label for="atk-disassoc">Disassociation</label>
+                    <input id="atk-disassoc" type="checkbox" x-model="attackDisassoc" @change="saveAttackSettings">
+                </div>
+                <div class="toggle-row">
+                    <label for="atk-roguem2">Rogue M2</label>
+                    <input id="atk-roguem2" type="checkbox" x-model="attackRoguem2" @change="saveAttackSettings">
+                </div>
+                <div class="attacks-note">Changes restart AngryOxide (within one epoch) to apply.</div>
+            </div>
+        </div>
+
+        <div class="grid" style="margin-top: 20px;">
+            <div class="card" style="grid-column: 1 / -1;">
                 <h2>Recent Handshakes <button class="btn" @click="loadHandshakes" style="float: right; font-size: 0.7rem;">Refresh</button></h2>
                 <div class="handshake-list" id="handshakes">
                     <template x-for="hs in handshakeList" :key="hs.path">
@@ -175,13 +221,62 @@
                 btConnected: false,
                 handshakeList: [],
 
+                attackRate: 1,
+                attackDeauth: true,
+                attackPmkid: true,
+                attackAnon: true,
+                attackCsa: true,
+                attackDisassoc: true,
+                attackRoguem2: true,
+                attackSaving: false,
+
                 async init() {
                     await this.refresh();
                     await this.loadHandshakes();
                     await this.loadFramebuffer();
+                    await this.loadAttackSettings();
                     setInterval(() => this.refresh(), 5000);
                     setInterval(() => this.loadFramebuffer(), 2000);
                     this.connectWS();
+                },
+
+                async loadAttackSettings() {
+                    try {
+                        const resp = await fetch('/api/attacks');
+                        const s = await resp.json();
+                        this.attackRate = s.rate;
+                        this.attackDeauth = s.deauth;
+                        this.attackPmkid = s.pmkid;
+                        this.attackAnon = s.anon;
+                        this.attackCsa = s.csa;
+                        this.attackDisassoc = s.disassoc;
+                        this.attackRoguem2 = s.roguem2;
+                    } catch (e) {
+                        console.error('Attack settings fetch failed:', e);
+                    }
+                },
+
+                async saveAttackSettings() {
+                    this.attackSaving = true;
+                    try {
+                        await fetch('/api/attacks', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rate: this.attackRate,
+                                deauth: this.attackDeauth,
+                                pmkid: this.attackPmkid,
+                                anon: this.attackAnon,
+                                csa: this.attackCsa,
+                                disassoc: this.attackDisassoc,
+                                roguem2: this.attackRoguem2,
+                            }),
+                        });
+                    } catch (e) {
+                        console.error('Attack settings save failed:', e);
+                    } finally {
+                        setTimeout(() => { this.attackSaving = false; }, 800);
+                    }
                 },
 
                 // Decode the raw 1-bit-per-pixel packed framebuffer (MSB

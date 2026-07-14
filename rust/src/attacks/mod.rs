@@ -8,13 +8,49 @@
 //! We just keep it alive and let `CaptureManager` pick up its output.
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tokio::process::{Child, Command};
 
 use crate::config::Config;
+
+/// Per-attack-type toggles and aggressiveness, adjustable live from the web
+/// dashboard — AngryOxide already exposes exactly these as CLI flags
+/// (--disable-deauth/--disable-pmkid/etc, -r for rate), so this just mirrors
+/// them instead of inventing a new attack-control scheme.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttackSettings {
+    /// 1-3, passed straight through to AngryOxide's -r (3 = most aggressive).
+    pub rate: u32,
+    pub deauth: bool,
+    pub pmkid: bool,
+    pub anon: bool,
+    pub csa: bool,
+    pub disassoc: bool,
+    pub roguem2: bool,
+}
+
+/// Cheaply-cloneable handle shared between the web server (writes new
+/// settings) and the attack engine (reads them on every spawn).
+pub type SharedAttackSettings = Arc<RwLock<AttackSettings>>;
+
+impl AttackSettings {
+    fn from_config(config: &Config) -> Self {
+        Self {
+            rate: config.oxigotchi.attack_rate_limit.clamp(1, 3),
+            deauth: true,
+            pmkid: true,
+            anon: true,
+            csa: true,
+            disassoc: true,
+            roguem2: true,
+        }
+    }
+}
 
 pub struct AttackEngine {
     config: Arc<Config>,
@@ -22,6 +58,11 @@ pub struct AttackEngine {
     whitelist_file: PathBuf,
     started_at: Option<Instant>,
     restart_count: u32,
+    settings: SharedAttackSettings,
+    /// Set by the web dashboard when settings change; ensure_running() kills
+    /// and respawns AngryOxide on the next check so the new flags actually
+    /// take effect, instead of waiting for it to crash on its own.
+    restart_requested: Arc<AtomicBool>,
 }
 
 impl AttackEngine {
@@ -30,12 +71,25 @@ impl AttackEngine {
         Self::write_whitelist(&whitelist_file, &config.main.whitelist).await?;
 
         Ok(Self {
+            settings: Arc::new(RwLock::new(AttackSettings::from_config(config))),
             config: config.clone(),
             child: None,
             whitelist_file,
             started_at: None,
             restart_count: 0,
+            restart_requested: Arc::new(AtomicBool::new(false)),
         })
+    }
+
+    /// Handle the web dashboard uses to read/write live attack settings.
+    pub fn settings_handle(&self) -> SharedAttackSettings {
+        self.settings.clone()
+    }
+
+    /// Handle the web dashboard uses to force AngryOxide to restart with
+    /// whatever settings are current, instead of waiting for it to crash.
+    pub fn restart_flag(&self) -> Arc<AtomicBool> {
+        self.restart_requested.clone()
     }
 
     async fn write_whitelist(path: &PathBuf, entries: &[String]) -> Result<()> {
@@ -52,6 +106,13 @@ impl AttackEngine {
     /// crash loop can't peg the CPU — the backoff resets once a run has
     /// stayed up for a minute, so it's only sustained failures that escalate.
     pub async fn ensure_running(&mut self, monitor_interface: &str) -> Result<()> {
+        if self.restart_requested.swap(false, Ordering::SeqCst) && self.child.is_some() {
+            tracing::info!("attack settings changed, restarting angryoxide");
+            self.stop().await;
+            self.restart_count = 0; // a settings change isn't a crash loop
+            return self.spawn(monitor_interface).await;
+        }
+
         if let Some(child) = &mut self.child {
             match child.try_wait() {
                 Ok(None) => return Ok(()), // still running
@@ -91,11 +152,14 @@ impl AttackEngine {
         let _ = tokio::fs::create_dir_all(&capture_dir).await;
         let output_base = capture_dir.join("oxigotchi");
 
-        // Our config's attack_rate_limit predates AngryOxide and defaults
-        // conservatively (1); reuse it directly as AO's 1-3 aggressiveness
-        // knob, so the existing "safe for the shared BCM43436 UART" default
-        // still means the least-aggressive setting.
-        let rate = self.config.oxigotchi.attack_rate_limit.clamp(1, 3);
+        // Read live settings fresh on every spawn (not just at construction)
+        // so a change from the web dashboard actually takes effect on the
+        // restart ensure_running() just triggered.
+        let settings = self
+            .settings
+            .read()
+            .expect("attack settings lock poisoned")
+            .clone();
 
         let mut cmd = Command::new("angryoxide");
         cmd.args([
@@ -106,14 +170,32 @@ impl AttackEngine {
             "-o",
             output_base.to_str().unwrap_or("/etc/pwnagotchi/handshakes/oxigotchi"),
             "-r",
-            &rate.to_string(),
+            &settings.rate.clamp(1, 3).to_string(),
             "--whitelist",
             self.whitelist_file.to_str().unwrap_or(""),
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
+        ]);
+        if !settings.deauth {
+            cmd.arg("--disable-deauth");
+        }
+        if !settings.pmkid {
+            cmd.arg("--disable-pmkid");
+        }
+        if !settings.anon {
+            cmd.arg("--disable-anon");
+        }
+        if !settings.csa {
+            cmd.arg("--disable-csa");
+        }
+        if !settings.disassoc {
+            cmd.arg("--disable-disassoc");
+        }
+        if !settings.roguem2 {
+            cmd.arg("--disable-roguem2");
+        }
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
 
         let child = cmd.spawn().context("failed to spawn angryoxide")?;
         tracing::info!("angryoxide started (pid {:?})", child.id());
