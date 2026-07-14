@@ -89,8 +89,6 @@ install -m 644 "${OVERLAY_DIR}/etc/pwnagotchi/config.toml" "${ROOT_MNT}/etc/pwna
 cat > "${ROOT_MNT}/etc/systemd/system/oxigotchi.service" << 'UNIT'
 [Unit]
 Description=oxigotchi daemon (Rust pwnagotchi)
-After=network.target bluetooth.target
-Conflicts=pwnagotchi.service bettercap.service
 
 [Service]
 Type=simple
@@ -107,12 +105,21 @@ WantedBy=multi-user.target
 UNIT
 
 echo "== Disabling stock pwnagotchi/bettercap so oxigotchi owns the radio+display =="
+# Mask (not just disable) pwnagotchi + bettercap directly via /dev/null
+# symlinks — this is unambiguous and doesn't depend on systemctl's offline
+# [Install]-section symlink handling working correctly under a qemu chroot.
+# Deliberately NOT touching pwngrid-peer.service: it only maintains an
+# identity keypair, is harmless to leave running, and disabling it in an
+# earlier attempt correlated with a boot-time timeout — something else on
+# this image likely waits on it reaching "active".
+for unit in pwnagotchi.service bettercap.service; do
+    ln -sf /dev/null "${ROOT_MNT}/etc/systemd/system/${unit}"
+    # Remove any stale enablement symlinks pointing at the real unit file.
+    find "${ROOT_MNT}/etc/systemd/system" -type l -lname "*/${unit}" -not -path "*/etc/systemd/system/${unit}" -delete 2>/dev/null || true
+done
+
 chroot "${ROOT_MNT}" /usr/bin/qemu-arm-static /bin/bash -c '
 set +e
-systemctl disable pwnagotchi.service 2>/dev/null
-systemctl disable bettercap.service 2>/dev/null
-systemctl disable pwngrid-peer.service 2>/dev/null
-systemctl daemon-reload
 systemctl enable oxigotchi.service
 '
 

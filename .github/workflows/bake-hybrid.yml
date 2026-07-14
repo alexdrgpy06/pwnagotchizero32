@@ -8,14 +8,14 @@ on:
     inputs:
       base_image_url:
         description: Base pwnagotchi image URL
-        default: https://github.com/jayofelony/pwnagotchi-bullseye/releases/download/v2.6.4/pwnagotchi-rpi-bullseye-2.6.4-armhf.img.xz
+        default: https://github.com/jayofelony/pwnagotchi-bullseye/releases/download/v2.8.4/pwnagotchi-rpi-bullseye-2.8.4-armhf.img.xz
 
 env:
   CARGO_TERM_COLOR: always
-  # v2.6.4, not the newer v2.8.4 "final" release: this exact version was
-  # directly verified booting AND driving the e-ink display on the target
-  # Pi Zero 2 W hardware (console + photo confirmed). Known-good beats newer.
-  BASE_IMAGE_URL: ${{ inputs.base_image_url || 'https://github.com/jayofelony/pwnagotchi-bullseye/releases/download/v2.6.4/pwnagotchi-rpi-bullseye-2.6.4-armhf.img.xz' }}
+  # v2.8.4 is jayofelony's final, most-polished pwnagotchi-bullseye release —
+  # same lineage/kernel/nexmon pairing as the v2.6.4 build already verified
+  # booting + driving the e-ink on this hardware, with more fixes on top.
+  BASE_IMAGE_URL: ${{ inputs.base_image_url || 'https://github.com/jayofelony/pwnagotchi-bullseye/releases/download/v2.8.4/pwnagotchi-rpi-bullseye-2.8.4-armhf.img.xz' }}
 
 jobs:
   bake:
