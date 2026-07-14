@@ -85,27 +85,31 @@ impl Display {
         Ok(())
     }
 
+    // Real Unicode kaomoji (pwnagotchi's own faces.py AWAKE/BROKEN), drawn
+    // with the TTF font like the main frame — these used to go through the
+    // ASCII-only bitmap font via draw_face(), a visibly different, smaller
+    // style than the rest of the display shows.
     pub fn show_boot_face(&mut self) -> Result<()> {
         self.clear()?;
-        self.draw_face("awake");
+        self.draw_ttf_text_centered("(◕‿‿◕)", 40, 35.0, true);
         self.driver.full_update(&self.buffer)?;
         Ok(())
     }
 
     pub fn show_shutdown(&mut self) -> Result<()> {
         self.clear()?;
-        self.draw_face("broken");
-        self.draw_text_centered("SHUTDOWN", 50);
+        self.draw_ttf_text_centered("(☓‿‿☓)", 30, 35.0, true);
+        self.draw_ttf_text_centered("SHUTDOWN", 85, 10.0, true);
         self.driver.full_update(&self.buffer)?;
         Ok(())
     }
 
     pub fn show_zombie(&mut self) -> Result<()> {
         self.clear()?;
-        self.draw_face("broken");
-        self.draw_text_centered("ZOMBIE", 40);
-        self.draw_text_centered("UNPLUG USB+BATT", 54);
-        self.draw_text_centered("WAIT 30-60s", 68);
+        self.draw_ttf_text_centered("(☓‿‿☓)", 15, 35.0, true);
+        self.draw_ttf_text_centered("ZOMBIE", 65, 10.0, true);
+        self.draw_ttf_text_centered("UNPLUG USB+BATT", 80, 10.0, true);
+        self.draw_ttf_text_centered("WAIT 30-60s", 95, 10.0, true);
         self.driver.full_update(&self.buffer)?;
         Ok(())
     }
@@ -115,53 +119,10 @@ impl Display {
         Ok(())
     }
 
-    /// Draw the face for the given mood. Faces are intentionally ASCII-only so
-    /// they render on the bitmap `FONT_10X20`; non-ASCII kaomoji show as blank
-    /// boxes on the e-ink panel's fonts.
-    pub fn draw_face(&mut self, face_name: &str) {
-        self.current_face = face_name.to_string();
-        let face = Self::ascii_face(face_name);
-        let _ = self.draw_face_str(face);
-    }
-
-    /// Map a mood name to a renderable ASCII face.
-    fn ascii_face(face_name: &str) -> &'static str {
-        match face_name {
-            "awake" => "(o__o)",
-            "sleep" => "(-__-)",
-            "happy" => "(^__^)",
-            "excited" => "(O__O)",
-            "bored" => "(-__-)",
-            "intense" => "(>__<)",
-            "cool" => "(-.-)",
-            "sad" => "(T__T)",
-            "angry" => "(x__x)",
-            "broken" => "(X__X)",
-            "upload" => "(1__0)",
-            "motivated" => "(*__*)",
-            "demotivated" => "(z__z)",
-            "smart" => "(+__+)",
-            "lonely" => "(u__u)",
-            "grateful" => "(^__^)",
-            "friend" => "(<3_3)",
-            "debug" => "(#__#)",
-            _ => "(o__o)",
-        }
-    }
-
-    /// Draw an arbitrary face string centered near the top in the large font.
-    pub fn draw_face_str(&mut self, face: &str) -> Result<()> {
-        self.draw_text_centered_font(face, 20, &FONT_10X20)
-    }
-
     pub fn draw_text(&mut self, x: i32, y: i32, text: &str) -> Result<()> {
         let style = embedded_graphics::mono_font::MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
         Text::with_baseline(text, Point::new(x, y), style, Baseline::Top).draw(&mut self.buffer)?;
         Ok(())
-    }
-
-    pub fn draw_text_centered(&mut self, text: &str, y: i32) -> Result<()> {
-        self.draw_text_centered_font(text, y, &FONT_6X10)
     }
 
     fn draw_text_centered_font(&mut self, text: &str, y: i32, font: &MonoFont) -> Result<()> {
@@ -216,6 +177,34 @@ impl Display {
             }
             cursor_x += advance;
         }
+    }
+
+    /// Total advance width of `text` at `size`, for centering — 0.0 if no
+    /// TTF is loaded (caller falls back to the bitmap-font centering path).
+    fn measure_ttf_text(&self, text: &str, size: f32, bold: bool) -> f32 {
+        use ab_glyph::{Font, ScaleFont};
+        let font = if bold {
+            self.font_bold.as_ref()
+        } else {
+            self.font_regular.as_ref()
+        };
+        let Some(font) = font else { return 0.0 };
+        let scaled = font.as_scaled(size);
+        text.chars()
+            .map(|ch| scaled.h_advance(scaled.glyph_id(ch)))
+            .sum()
+    }
+
+    /// Draw TTF text horizontally centered on the panel, falling back to the
+    /// bitmap ASCII font (also centered) if no TTF is loaded.
+    fn draw_ttf_text_centered(&mut self, text: &str, y: i32, size: f32, bold: bool) {
+        if self.font_regular.is_none() && self.font_bold.is_none() {
+            let _ = self.draw_text_centered_font(text, y, &FONT_10X20);
+            return;
+        }
+        let width = self.measure_ttf_text(text, size, bold);
+        let x = ((self.buffer.width() as f32 - width) / 2.0).max(0.0) as i32;
+        self.draw_ttf_text(text, x, y, size, bold);
     }
 
     /// Draw text right-aligned so it ends at `x_right`.

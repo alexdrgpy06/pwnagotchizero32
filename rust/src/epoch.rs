@@ -277,12 +277,24 @@ impl EpochLoop {
         }
     }
 
+    /// Always returns Ok — a failed shutdown-screen draw must never stop the
+    /// daemon from exiting cleanly. This used to propagate display errors
+    /// via `?`, which gave the process a non-zero exit code on a display
+    /// hiccup during shutdown (SPI/BUSY glitches are exactly the kind of
+    /// thing more likely mid-power-down, not less). With
+    /// Restart=on-failure, that made systemd respawn the daemon right as
+    /// the system was trying to power off/reboot — a race that shows up on
+    /// the panel as repeatedly cycling between the shutdown face and the
+    /// boot face instead of shutting down once, cleanly.
     pub async fn shutdown(&mut self) -> Result<()> {
         self.running = false;
         self.attacks.stop().await;
-        self.display.show_shutdown()?;
-        // EpdDriver::sleep is sync now
-        self.display.sleep()?;
+        if let Err(e) = self.display.show_shutdown() {
+            tracing::warn!("shutdown screen draw failed (continuing): {e}");
+        }
+        if let Err(e) = self.display.sleep() {
+            tracing::warn!("display sleep failed (continuing): {e}");
+        }
         Ok(())
     }
 }
