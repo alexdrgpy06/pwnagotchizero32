@@ -51,27 +51,47 @@ impl EpdDriver {
     #[cfg(target_os = "linux")]
     pub fn new(config: &Config) -> Result<Self> {
         use spidev::{SpiModeFlags, Spidev, SpidevOptions};
+        use std::{thread, time::Duration};
 
-        let spi = match Spidev::open("/dev/spidev0.0") {
-            Ok(mut spi) => {
-                let options = SpidevOptions::new()
-                    .bits_per_word(8)
-                    .max_speed_hz(4_000_000)
-                    .mode(SpiModeFlags::SPI_MODE_0)
-                    .build();
-                match spi.configure(&options) {
-                    Ok(()) => Some(spi),
-                    Err(e) => {
-                        tracing::warn!("e-ink SPI configure failed, running headless: {e}");
-                        None
+        // oxigotchi.service has no ordering dependency on the spidev device
+        // node showing up (dtparam=spi=on applies at kernel boot, but udev
+        // still needs a moment to create /dev/spidev0.0) — observed in
+        // practice as an ENOENT on the very first attempt, moments after
+        // boot, with the device present half a second later. A few short
+        // retries turn that race into a non-issue instead of running
+        // headless for the rest of the session over pure timing.
+        let mut spi = None;
+        for attempt in 1..=5 {
+            match Spidev::open("/dev/spidev0.0") {
+                Ok(mut dev) => {
+                    let options = SpidevOptions::new()
+                        .bits_per_word(8)
+                        .max_speed_hz(4_000_000)
+                        .mode(SpiModeFlags::SPI_MODE_0)
+                        .build();
+                    match dev.configure(&options) {
+                        Ok(()) => {
+                            spi = Some(dev);
+                            break;
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "e-ink SPI configure failed (attempt {attempt}/5): {e}"
+                            );
+                        }
                     }
                 }
+                Err(e) if attempt < 5 => {
+                    tracing::debug!("e-ink SPI open failed (attempt {attempt}/5): {e}");
+                }
+                Err(e) => {
+                    tracing::warn!("e-ink SPI open failed after 5 attempts, running headless: {e}");
+                }
             }
-            Err(e) => {
-                tracing::warn!("e-ink SPI open failed, running headless: {e}");
-                None
+            if spi.is_none() {
+                thread::sleep(Duration::from_millis(200));
             }
-        };
+        }
 
         let dc_pin = config.oxigotchi.display_dc_pin;
         let rst_pin = config.oxigotchi.display_rst_pin;
