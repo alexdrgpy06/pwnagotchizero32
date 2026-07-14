@@ -77,6 +77,24 @@ jobs:
           sudo apt-get install -y --no-install-recommends qemu-user-static binfmt-support parted kpartx
           docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
+      - name: Download AngryOxide (prebuilt ARMv6 musl-static)
+        env:
+          # Pinned, not "latest": verified directly (ELF header inspection)
+          # to be a genuine ARMv6 (Tag_CPU_arch=ARMv6) static binary — runs
+          # on both the original Pi Zero and the Zero 2 W, no dynamic
+          # dependency risk on the base image (same reasoning as our own
+          # daemon binary).
+          AO_VERSION: v0.9.2
+        run: |
+          wget -q -O angryoxide.tar.gz \
+            "https://github.com/Ragnt/AngryOxide/releases/download/${AO_VERSION}/angryoxide-linux-arm-musl.tar.gz"
+          mkdir -p angryoxide-extract
+          tar xzf angryoxide.tar.gz -C angryoxide-extract
+          find angryoxide-extract -name angryoxide -type f -exec chmod +x {} \;
+          find angryoxide-extract -name angryoxide -type f -exec cp {} ./angryoxide \;
+          test -x ./angryoxide
+          file ./angryoxide
+
       - name: Bake
         env:
           WPA_SEC_API_KEY: ${{ secrets.WPA_SEC_API_KEY }}
@@ -84,7 +102,8 @@ jobs:
           sudo -E bash scripts/bake_on_pwnagotchi.sh \
             base/base.img \
             rust/target/arm-unknown-linux-gnueabihf/release/oxigotchi \
-            oxigotchi-hybrid.img
+            oxigotchi-hybrid.img \
+            ./angryoxide
 
       - name: Compress
         run: |

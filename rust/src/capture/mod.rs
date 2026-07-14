@@ -85,6 +85,46 @@ impl CaptureManager {
         Ok(())
     }
 
+    /// Scan the capture directory for new AngryOxide-produced .hc22000 files
+    /// (AO writes these directly, ready for hashcat — no conversion needed)
+    /// and register any we haven't already seen. AngryOxide's exact filename
+    /// scheme isn't something we depend on here — we only need to detect
+    /// that a new capture appeared, not parse its AP identity precisely.
+    /// Returns the paths of newly registered captures, so the caller can
+    /// drive mood/XP updates per new handshake.
+    pub async fn scan_new_captures(&mut self) -> Result<Vec<PathBuf>> {
+        let mut new_files = Vec::new();
+        let mut dir = fs::read_dir(&self.capture_dir).await?;
+        while let Some(entry) = dir.next_entry().await? {
+            let path = entry.path();
+            let is_hc22000 = path.extension().map_or(false, |e| e == "hc22000");
+            if !is_hc22000 || self.upload_queue.iter().any(|c| c.path == path) {
+                continue;
+            }
+            new_files.push(path);
+        }
+
+        for path in &new_files {
+            let bssid = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let ap = AccessPoint {
+                bssid,
+                ssid: String::new(),
+                channel: 0,
+                rssi: 0,
+                encryption: String::new(),
+                vendor: String::new(),
+            };
+            self.register_handshake(path.clone(), ap, String::new(), HandshakeType::FullHandshake)
+                .await?;
+        }
+
+        Ok(new_files)
+    }
+
     /// Convert pcapng to hccapx for hashcat
     pub async fn to_hccapx(&self, pcapng_path: &Path) -> Result<PathBuf> {
         let hccapx_path = pcapng_path.with_extension("hccapx");

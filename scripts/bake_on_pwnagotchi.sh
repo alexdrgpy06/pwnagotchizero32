@@ -7,13 +7,14 @@
 # NOTHING but the daemon layer, deliberately, so none of that proven state can
 # regress.
 #
-# Usage: sudo bash bake_on_pwnagotchi.sh <base-image.img> <oxigotchi-binary> <output.img>
+# Usage: sudo bash bake_on_pwnagotchi.sh <base-image.img> <oxigotchi-binary> <output.img> [angryoxide-binary]
 
 set -euo pipefail
 
 BASE_IMG="$1"
 DAEMON_BIN="$2"
 OUT_IMG="$3"
+ANGRYOXIDE_BIN="${4:-}"
 OVERLAY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/stage3/05-install-oxigotchi/files"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -69,6 +70,11 @@ mount --bind /sys "${ROOT_MNT}/sys"
 echo "== Installing the oxigotchi daemon =="
 install -d -m 755 "${ROOT_MNT}/etc/oxigotchi"
 install -m 755 "${DAEMON_BIN}" "${ROOT_MNT}/usr/local/bin/oxigotchi"
+
+if [ -n "${ANGRYOXIDE_BIN}" ] && [ -f "${ANGRYOXIDE_BIN}" ]; then
+    echo "== Installing AngryOxide (attack/capture engine) =="
+    install -m 755 "${ANGRYOXIDE_BIN}" "${ROOT_MNT}/usr/local/bin/angryoxide"
+fi
 
 # Only bring in what our daemon actually needs beyond what pwnagotchi already
 # ships: the daemon binary's own helper scripts (monstart/monstop) and our

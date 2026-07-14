@@ -106,7 +106,7 @@ async fn main() -> Result<()> {
         res = epoch_loop.run() => res,
         _ = shutdown.notified() => {
             tracing::info!("shutdown");
-            epoch_loop.shutdown()?;
+            epoch_loop.shutdown().await?;
             Ok(())
         }
     }

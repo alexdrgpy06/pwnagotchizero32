@@ -77,9 +77,13 @@ impl EpochLoop {
             tracing::warn!("display init (headless): {e}");
         }
 
-        // Start monitor mode
+        // Start monitor mode, then hand the interface to AngryOxide — it owns
+        // scanning/channel-hopping/attacking from here.
         if let Err(e) = self.wifi.start_monitor_mode().await {
             tracing::warn!("monitor mode: {e}");
+        }
+        if let Err(e) = self.attacks.ensure_running(self.wifi.monitor_interface()).await {
+            tracing::warn!("angryoxide start: {e}");
         }
 
         // Bluetooth PAN (best-effort)
@@ -110,19 +114,30 @@ impl EpochLoop {
     async fn run_epoch(&mut self) -> Result<()> {
         self.epoch += 1;
 
-        // Phase 1-2: scan + attack
-        let aps = self.wifi.get_aps().to_vec();
-        for ap in &aps {
-            if !self.wifi.is_whitelisted(&ap.ssid, &ap.bssid) {
-                let _ = self.attacks.deauth(ap, None).await;
-            }
+        // Phase 1: AngryOxide owns scanning/channel-hopping/attacking once
+        // started; this just restarts it (with backoff) if it has crashed.
+        if let Err(e) = self.attacks.ensure_running(self.wifi.monitor_interface()).await {
+            tracing::warn!("angryoxide health check: {e}");
         }
 
-        // Phase 3: check captures — real daemon handles this via inotify / polling
-        // Phase 4: update display
+        // Phase 2: pick up any new capture files AngryOxide has written, and
+        // give the bull his mood/XP boost for each one.
+        match self.captures.scan_new_captures().await {
+            Ok(new_files) => {
+                for _ in &new_files {
+                    self.personality.update_on_handshake();
+                }
+                if !new_files.is_empty() {
+                    tracing::info!("captured {} new handshake(s)", new_files.len());
+                }
+            }
+            Err(e) => tracing::warn!("capture scan: {e}"),
+        }
+
+        // Phase 3: update display
         self.update_display()?;
 
-        // Phase 5: maintenance
+        // Phase 4: maintenance
         self.maintenance().await?;
 
         // Publish live snapshot for the web dashboard
@@ -206,7 +221,7 @@ impl EpochLoop {
             && !self.pisugar.is_charging()
         {
             tracing::warn!("low battery, shutting down");
-            let _ = self.shutdown();
+            let _ = self.shutdown().await;
         }
         // WiFi recovery check
         let _ = self.recovery.check().await;
@@ -223,8 +238,9 @@ impl EpochLoop {
         }
     }
 
-    pub fn shutdown(&mut self) -> Result<()> {
+    pub async fn shutdown(&mut self) -> Result<()> {
         self.running = false;
+        self.attacks.stop().await;
         self.display.show_shutdown()?;
         // EpdDriver::sleep is sync now
         self.display.sleep()?;

@@ -187,6 +187,12 @@ impl WifiManager {
         self.current_channel
     }
 
+    /// The monitor-mode interface name (e.g. "wlan0mon"), for handing off to
+    /// an external attack tool like AngryOxide once monitor mode is up.
+    pub fn monitor_interface(&self) -> &str {
+        &self.monitor_interface
+    }
+
     pub fn get_aps(&self) -> &[AccessPoint] {
         &self.ap_list
     }
