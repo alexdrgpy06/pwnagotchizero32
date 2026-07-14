@@ -8,6 +8,7 @@ use embedded_graphics::{
     },
     pixelcolor::BinaryColor,
     prelude::*,
+    primitives::{Line, PrimitiveStyle},
     text::{Baseline, Text},
     Drawable,
 };
@@ -144,6 +145,67 @@ impl Display {
 
     pub fn draw_status_line(&mut self, y: i32, status: &str) -> Result<()> {
         self.draw_text(0, y, status)
+    }
+
+    /// Draw text right-aligned so it ends at `x_right`.
+    fn draw_text_right(&mut self, x_right: i32, y: i32, text: &str) -> Result<()> {
+        let style = embedded_graphics::mono_font::MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
+        let bounds = Text::with_baseline(text, Point::zero(), style, Baseline::Top).bounding_box();
+        let x = (x_right - bounds.size.width as i32).max(0);
+        Text::with_baseline(text, Point::new(x, y), style, Baseline::Top).draw(&mut self.buffer)?;
+        Ok(())
+    }
+
+    /// Full-width horizontal divider, one pixel tall.
+    fn draw_hline(&mut self, y: i32) -> Result<()> {
+        let w = self.buffer.width() as i32;
+        Line::new(Point::new(0, y), Point::new(w - 1, y))
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 1))
+            .draw(&mut self.buffer)?;
+        Ok(())
+    }
+
+    /// The classic pwnagotchi layout: a header bar (channel/APs/blind epochs
+    /// left, uptime right), a name + status-phrase line, the big face
+    /// centered, and a footer bar (handshakes/level left, mode right) — two
+    /// full-width divider lines separating the three bands. Replaces the
+    /// single face + one debug line the daemon used to draw, which showed
+    /// none of the information an actual pwnagotchi display shows.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_pwnagotchi_frame(
+        &mut self,
+        channel: u8,
+        aps_found: usize,
+        blind_epochs: u32,
+        uptime: &str,
+        name: &str,
+        phrase: &str,
+        face: &str,
+        handshakes: u64,
+        level: u32,
+        mode: &str,
+    ) -> Result<()> {
+        let w = self.buffer.width() as i32;
+
+        self.draw_text(0, 0, &format!("CH:{channel} APS:{aps_found} ({blind_epochs})"))?;
+        self.draw_text_right(w, 0, &format!("UP:{uptime}"))?;
+        self.draw_hline(11)?;
+
+        self.draw_text(0, 14, &format!("{name}>"))?;
+        self.draw_text_right(w, 14, phrase)?;
+
+        // `face` is a mood name (e.g. "happy"), same as draw_face() expects —
+        // resolved through the same ASCII-safe table since the panel's
+        // bitmap fonts render non-ASCII kaomoji as blank boxes. Positioned
+        // lower than draw_face_str's y:20 default (that's for the simpler
+        // boot/shutdown screens with no header band) to center it in the
+        // band between the name line (ends ~24) and the footer divider (100).
+        self.draw_text_centered_font(Self::ascii_face(face), 45, &FONT_10X20)?;
+
+        self.draw_hline(100)?;
+        self.draw_text(0, 104, &format!("PWND:{handshakes} (Lv{level})"))?;
+        self.draw_text_right(w, 104, mode)?;
+        Ok(())
     }
 
     pub fn draw_battery(&mut self, x: i32, y: i32, percent: u8) -> Result<()> {

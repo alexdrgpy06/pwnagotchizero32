@@ -121,6 +121,29 @@ impl Personality {
         self.state.mood
     }
 
+    /// A short status phrase for the current mood, for the name/phrase line
+    /// next to the face — config.toml only carries face-emoji pools (ported
+    /// from pwnagotchi's own schema), never text phrases, so this is a
+    /// small fixed table rather than another config section.
+    pub fn get_phrase(&self) -> &'static str {
+        let pool: &[&str] = match self.state.mood {
+            Mood::Excited => &["Hack the Planet!", "Let's go!", "So many APs!"],
+            Mood::Happy | Mood::Grateful | Mood::Friend => {
+                &["Hack the Planet!", "Feeling good", "Thanks for the WiFi"]
+            }
+            Mood::Motivated | Mood::Smart => &["Learning...", "Getting smarter"],
+            Mood::Cool => &["Just cruising"],
+            Mood::Bored | Mood::Lonely => &["Anyone out there?", "So quiet..."],
+            Mood::Sad | Mood::Demotivated => &["Where is everyone?"],
+            Mood::Angry => &["Ugh."],
+            Mood::Broken => &["Something's wrong"],
+            Mood::Intense => &["Focused."],
+            Mood::Debug => &["Debugging..."],
+            Mood::Upload => &["Uploading..."],
+        };
+        pool[rand::thread_rng().gen_range(0..pool.len())]
+    }
+
     pub fn blind_epochs(&self) -> u32 {
         self.state.blind_epochs
     }

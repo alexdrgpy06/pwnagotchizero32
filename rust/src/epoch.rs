@@ -185,22 +185,27 @@ impl EpochLoop {
         // this the previous face and status text would remain underneath.
         self.display.clear()?;
 
+        // Classic pwnagotchi layout — header (channel/APs/blind epochs,
+        // uptime), name + mood phrase, big face, footer (handshakes/level,
+        // mode) — replacing the bare face + one raw debug line this used to
+        // draw, which showed none of the information an actual pwnagotchi
+        // display shows.
         let stats = self.personality.get_stats();
         let mood_str = format!("{:?}", stats.mood).to_lowercase();
-        self.display.draw_face(&mood_str);
-
-        let status = format!(
-            "Epoch:{} HS:{} BT:{} Bat:{}%",
-            self.epoch,
+        let secs = self.start.elapsed().as_secs();
+        let uptime = format!("{:02}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60);
+        self.display.draw_pwnagotchi_frame(
+            self.wifi.current_channel(),
+            self.wifi.get_aps().len(),
+            self.personality.blind_epochs(),
+            &uptime,
+            &self.config.main.name,
+            self.personality.get_phrase(),
+            &mood_str,
             stats.handshakes,
-            if self.bluetooth.is_connected() {
-                "on"
-            } else {
-                "off"
-            },
-            self.pisugar.battery_percent(),
-        );
-        self.display.draw_status_line(100, &status)?;
+            stats.level,
+            "AUTO",
+        )?;
 
         // Partial refresh most epochs; force a full (de-ghosting) refresh on
         // the first epoch and every `display_full_refresh_interval` after, or
