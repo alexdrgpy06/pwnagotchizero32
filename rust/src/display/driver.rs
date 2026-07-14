@@ -34,8 +34,12 @@ mod update_mode {
 
 /// E-ink display driver (SSD1680 over SPI + GPIO)
 pub struct EpdDriver {
+    // `None` when the SPI device couldn't be opened/configured at startup
+    // (wrong bus, dtoverlay not applied yet, permissions). The daemon must
+    // keep running headless rather than dying entirely over one bad panel —
+    // every send_* method below becomes a no-op in that case.
     #[cfg(target_os = "linux")]
-    spi: spidev::Spidev,
+    spi: Option<spidev::Spidev>,
     dc_pin: u32,
     rst_pin: u32,
     busy_pin: u32,
@@ -48,19 +52,34 @@ impl EpdDriver {
     pub fn new(config: &Config) -> Result<Self> {
         use spidev::{SpiModeFlags, Spidev, SpidevOptions};
 
-        let mut spi = Spidev::open("/dev/spidev0.0")?;
-        let options = SpidevOptions::new()
-            .bits_per_word(8)
-            .max_speed_hz(4_000_000)
-            .mode(SpiModeFlags::SPI_MODE_0)
-            .build();
-        spi.configure(&options)?;
+        let spi = match Spidev::open("/dev/spidev0.0") {
+            Ok(mut spi) => {
+                let options = SpidevOptions::new()
+                    .bits_per_word(8)
+                    .max_speed_hz(4_000_000)
+                    .mode(SpiModeFlags::SPI_MODE_0)
+                    .build();
+                match spi.configure(&options) {
+                    Ok(()) => Some(spi),
+                    Err(e) => {
+                        tracing::warn!("e-ink SPI configure failed, running headless: {e}");
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("e-ink SPI open failed, running headless: {e}");
+                None
+            }
+        };
 
         let dc_pin = config.oxigotchi.display_dc_pin;
         let rst_pin = config.oxigotchi.display_rst_pin;
         let busy_pin = config.oxigotchi.display_busy_pin;
 
-        Self::setup_gpio(dc_pin, rst_pin, busy_pin)?;
+        if spi.is_some() {
+            Self::setup_gpio(dc_pin, rst_pin, busy_pin)?;
+        }
 
         Ok(Self {
             spi,
@@ -111,8 +130,10 @@ impl EpdDriver {
         Ok(())
     }
 
+    // Associated functions (no `self`) so send_command/send_data can call
+    // them while holding a `&mut` borrow of `self.spi` at the same time.
     #[cfg(target_os = "linux")]
-    fn gpio_write(&self, pin: u32, value: u8) -> Result<()> {
+    fn gpio_write(pin: u32, value: u8) -> Result<()> {
         std::fs::write(
             format!("/sys/class/gpio/gpio{}/value", pin),
             value.to_string(),
@@ -121,7 +142,7 @@ impl EpdDriver {
     }
 
     #[cfg(target_os = "linux")]
-    fn gpio_read(&self, pin: u32) -> Result<u8> {
+    fn gpio_read(pin: u32) -> Result<u8> {
         let val = std::fs::read_to_string(format!("/sys/class/gpio/gpio{}/value", pin))?;
         Ok(val.trim().parse().unwrap_or(0))
     }
@@ -140,7 +161,7 @@ impl EpdDriver {
         };
         let start = Instant::now();
         loop {
-            match self.gpio_read(self.busy_pin) {
+            match Self::gpio_read(self.busy_pin) {
                 Ok(0) => return,
                 Ok(_) => {}
                 Err(e) => {
@@ -160,11 +181,11 @@ impl EpdDriver {
     #[cfg(target_os = "linux")]
     fn hw_reset(&self) -> Result<()> {
         use std::{thread, time::Duration};
-        self.gpio_write(self.rst_pin, 1)?;
+        Self::gpio_write(self.rst_pin, 1)?;
         thread::sleep(Duration::from_millis(20));
-        self.gpio_write(self.rst_pin, 0)?;
+        Self::gpio_write(self.rst_pin, 0)?;
         thread::sleep(Duration::from_millis(5));
-        self.gpio_write(self.rst_pin, 1)?;
+        Self::gpio_write(self.rst_pin, 1)?;
         thread::sleep(Duration::from_millis(20));
         Ok(())
     }
@@ -172,18 +193,26 @@ impl EpdDriver {
     #[cfg(target_os = "linux")]
     fn send_command(&mut self, command: u8) -> Result<()> {
         use std::io::Write;
-        self.gpio_write(self.dc_pin, 0)?;
-        self.spi.write_all(&[command])?;
+        let dc_pin = self.dc_pin;
+        let Some(spi) = self.spi.as_mut() else {
+            return Ok(());
+        };
+        Self::gpio_write(dc_pin, 0)?;
+        spi.write_all(&[command])?;
         Ok(())
     }
 
     #[cfg(target_os = "linux")]
     fn send_data(&mut self, data: &[u8]) -> Result<()> {
         use std::io::Write;
-        self.gpio_write(self.dc_pin, 1)?;
+        let dc_pin = self.dc_pin;
+        let Some(spi) = self.spi.as_mut() else {
+            return Ok(());
+        };
+        Self::gpio_write(dc_pin, 1)?;
         // spidev caps a single transfer; chunk to stay within the driver limit.
         for chunk in data.chunks(4096) {
-            self.spi.write_all(chunk)?;
+            spi.write_all(chunk)?;
         }
         Ok(())
     }
@@ -191,8 +220,12 @@ impl EpdDriver {
     #[cfg(target_os = "linux")]
     fn send_data_byte(&mut self, data: u8) -> Result<()> {
         use std::io::Write;
-        self.gpio_write(self.dc_pin, 1)?;
-        self.spi.write_all(&[data])?;
+        let dc_pin = self.dc_pin;
+        let Some(spi) = self.spi.as_mut() else {
+            return Ok(());
+        };
+        Self::gpio_write(dc_pin, 1)?;
+        spi.write_all(&[data])?;
         Ok(())
     }
 
