@@ -132,9 +132,17 @@ impl DrawTarget for FrameBuffer {
     where
         I: IntoIterator<Item = Self::Color>,
     {
+        // area.bottom_right() is the *inclusive* corner (top_left + size -
+        // (1,1)), not an exclusive bound — using it directly as one made
+        // every fill under-draw by a row and a column, and made any area
+        // exactly 1px tall or wide (e.g. the horizontal scanlines circles
+        // fill with) draw nothing at all, since `y..y` is empty. Compute the
+        // exclusive bound from top_left + size instead.
         let mut colors = colors.into_iter();
-        for y in area.top_left.y..area.bottom_right().unwrap().y {
-            for x in area.top_left.x..area.bottom_right().unwrap().x {
+        let x_end = area.top_left.x + area.size.width as i32;
+        let y_end = area.top_left.y + area.size.height as i32;
+        for y in area.top_left.y..y_end {
+            for x in area.top_left.x..x_end {
                 if let Some(color) = colors.next() {
                     if x >= 0 && y >= 0 {
                         self.set_pixel(x as u32, y as u32, color);
