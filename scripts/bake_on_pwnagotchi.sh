@@ -86,6 +86,21 @@ install -d -m 755 "${ROOT_MNT}/etc/pwnagotchi/conf.d" "${ROOT_MNT}/etc/pwnagotch
     "${ROOT_MNT}/etc/pwnagotchi/log" "${ROOT_MNT}/etc/pwnagotchi/backups" "${ROOT_MNT}/etc/pwnagotchi/sessions"
 install -m 644 "${OVERLAY_DIR}/etc/pwnagotchi/config.toml" "${ROOT_MNT}/etc/pwnagotchi/config.toml"
 
+# Inject secrets at bake time only — never as literals in the tracked overlay
+# config, which lives in a public repo. Set WPA_SEC_API_KEY in the environment
+# (from a GitHub Actions secret) to have it written into the baked image.
+# Scoped to the [main.plugins.wpa-sec] section specifically: other plugins
+# (ohcapi, wigle) also have an empty api_key field in this file.
+if [ -n "${WPA_SEC_API_KEY:-}" ]; then
+    awk -v key="${WPA_SEC_API_KEY}" '
+        /^\[main\.plugins\.wpa-sec\]/ { in_section=1 }
+        /^\[/ && !/^\[main\.plugins\.wpa-sec\]/ { in_section=0 }
+        in_section && /^api_key = ""$/ { print "api_key = \"" key "\""; next }
+        { print }
+    ' "${ROOT_MNT}/etc/pwnagotchi/config.toml" > "${ROOT_MNT}/etc/pwnagotchi/config.toml.tmp"
+    mv "${ROOT_MNT}/etc/pwnagotchi/config.toml.tmp" "${ROOT_MNT}/etc/pwnagotchi/config.toml"
+fi
+
 cat > "${ROOT_MNT}/etc/systemd/system/oxigotchi.service" << 'UNIT'
 [Unit]
 Description=oxigotchi daemon (Rust pwnagotchi)

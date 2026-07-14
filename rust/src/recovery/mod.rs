@@ -26,6 +26,10 @@ impl RecoveryManager {
     }
 
     pub async fn check(&mut self) -> Result<()> {
+        if !self.config.oxigotchi.wifi_recovery_enabled {
+            return Ok(());
+        }
+
         // Check dmesg for firmware errors
         let output = Command::new("dmesg")
             .args(["-T", "--since", "60 seconds ago"])
@@ -63,52 +67,39 @@ impl RecoveryManager {
         self.error_count += 1;
         self.last_error = Some(Instant::now());
 
-        // Soft recovery: reset WiFi via GPIO
+        // Soft recovery: iw-only interface restart, no state that can't be
+        // undone in software. If that doesn't clear the fault after a few
+        // tries, stop trying and surface it instead of escalating.
         if self.soft_recovery_count < 3 {
             self.soft_recovery().await?;
             self.soft_recovery_count += 1;
         } else {
-            // Hard recovery: request full power cycle
             self.hard_recovery().await?;
         }
 
         Ok(())
     }
 
+    /// Restart monitor mode without touching the radio's power state. This is
+    /// deliberately narrow: no modprobe -r, no GPIO toggling of WL_REG_ON, no
+    /// MMC/SDIO unbind. Those actions can leave the SDIO bus in a state that
+    /// only a physical power cycle clears — exactly the "wlan0mon MAC all
+    /// zeros / RSSI -100" zombie state this recovery exists to avoid.
     async fn soft_recovery(&self) -> Result<()> {
-        // Bring down interface
         let _ = Command::new("ip")
-            .args(["link", "set", "wlan0", "down"])
+            .args(["link", "set", "wlan0mon", "down"])
+            .output();
+        sleep(Duration::from_millis(500)).await;
+        let _ = Command::new("iw")
+            .args(["dev", "wlan0mon", "set", "type", "monitor"])
+            .output();
+        let _ = Command::new("ip")
+            .args(["link", "set", "wlan0mon", "up"])
             .output();
 
-        // Remove module
-        let _ = Command::new("modprobe").args(["-r", "brcmfmac"]).output();
-
-        // Toggle WL_REG_ON GPIO (typically GPIO 4 on Pi Zero W)
-        let gpio = self.config.oxigotchi.wifi_recovery_gpio;
-
-        // Export GPIO if needed
-        let gpio_path = format!("/sys/class/gpio/gpio{}", gpio);
-        if !std::path::Path::new(&gpio_path).exists() {
-            let _ = std::fs::write("/sys/class/gpio/export", gpio.to_string());
-        }
-        let _ = std::fs::write(format!("/sys/class/gpio/gpio{}/direction", gpio), "out");
-
-        // Pulse low
-        let _ = std::fs::write(format!("/sys/class/gpio/gpio{}/value", gpio), "0");
-        sleep(Duration::from_millis(500)).await;
-
-        // Pulse high
-        let _ = std::fs::write(format!("/sys/class/gpio/gpio{}/value", gpio), "1");
-        sleep(Duration::from_millis(100)).await;
-
-        // Reload module
-        let _ = Command::new("modprobe").args(["brcmfmac"]).output();
-
-        // Wait for interface
-        for _ in 0..20 {
+        for _ in 0..10 {
             sleep(Duration::from_millis(500)).await;
-            let output = Command::new("ip").args(["link", "show", "wlan0"]).output();
+            let output = Command::new("ip").args(["link", "show", "wlan0mon"]).output();
             if output.is_ok() && output.unwrap().status.success() {
                 break;
             }
@@ -117,15 +108,14 @@ impl RecoveryManager {
         Ok(())
     }
 
+    /// No automatic power-cycle attempt: GPIO-toggling WL_REG_ON or
+    /// unbinding the SDIO controller from software has, in practice (see
+    /// CoderFX/oxigotchi's v3.3.5 fix), left the chip in a state that needs a
+    /// physical USB+battery power cycle to clear — worse than doing nothing.
+    /// Surface the failure and let the operator power-cycle instead.
     async fn hard_recovery(&self) -> Result<()> {
-        // Signal that hardware power cycle is needed
-        // This would typically trigger the display to show "ZOMBIE" face
-        // and the safe-shutdown script would handle the actual power cycle
         eprintln!("HARD RECOVERY NEEDED: WiFi firmware dead, requires power cycle");
-
-        // Write recovery state for display
         let _ = std::fs::write("/tmp/pwnagotchi-recovery", "zombie");
-
         Ok(())
     }
 
